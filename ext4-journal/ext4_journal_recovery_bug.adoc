@@ -1,0 +1,764 @@
+= EXT4 Root Filesystem Journal Recovery Issue
+:doctype: article
+:icons: font
+:icon-set: fa
+:pdf-fontsdir: /usr/share/fonts
+:imagesdir: .
+:sectnums:
+:email: Abhishekojha38@gmail.com
+
+== Journal? What’s That?
+
+See the section <<ext4-journal-big-picture,EXT4 Journal Big Picture>> for an
+overview.
+
+== icon:bug[] Let's take a closer look at the bug
+
+
+During the boot process, the kernel attempts to mount the *EXT4 root filesystem*.  
+If the filesystem’s *journal area (JBD2)* is corrupted, the journal recovery
+cannot complete successfully, resulting in mount failures or kernel panics.
+
+[source,console]
+----
+EXT4-fs (mmcblk0p3): INFO: recovery required on readonly filesystem
+EXT4-fs (mmcblk0p3): write access will be enabled during recovery
+JBD2: journal transaction 216 on mmcblk0p3-8 is corrupt.
+EXT4-fs (mmcblk0p3): error loading journal
+VFS: Cannot open root device "mmcblk0p3" or unknown-block(179,3): error -117
+----
+icon:exclamation-triangle[] **Warning:** Mount failed due to corrupted journal.
+
+=== icon:search[] Analysis from logs
+
+icon:info-circle[]That kernel message means a JBD2 (journaling) transaction in
+the filesystem journal is corrupted — the kernel tried to replay transaction
+*216* for partition */dev/mmcblk0p3* (journal device mmcblk0p3-8) and
+found it invalid, so recovery failed and the rootfs cannot be mounted
+normally.
+
+In situations like this, you might attempt to upgrade the system or boot
+from the secondary partition. However, if that partition mounts
+immediately, it will start writing to the EXT4 volume. This should be
+avoided, as any write operation can alter the filesystem state, making
+it impossible to reproduce or properly debug the issue.
+
+**We have a malfunctioning board on hand; let's begin investigating the issue.**
+
+=== icon:usb[] Copy rootfs using U-Boot UMS
+
+* Ensure automounting is disabled on the host.
+* icon:terminal[] U-Boot commands:
+
+[source,console]
+----
+u-boot=> mmc dev 0
+switch to partitions #0, OK
+mmc0(part 0) is current device
+u-boot=> mmc part
+
+Partition Map for MMC device 0  --   Partition Type: DOS
+
+Part    Start Sector    Num Sectors     UUID            Type
+  1     20480           204801          1c4daa58-01     83
+  2     225281          204801          1c4daa58-02     83
+  3     430082          7400001         1c4daa58-03     83 <<< corrupted
+  4     7830083         7443517         1c4daa58-04     05 Extd
+  5     7833600         7400001         1c4daa58-05     83
+  6     15237120        36480           1c4daa58-06     83
+u-boot=> mmc dev 0
+switch to partitions #0, OK
+mmc0(part 0) is current device
+u-boot=> ums 0 mmc 0:3
+UMS: LUN 0, dev mmc 0, hwpart 0, sector 0x69002, count 0x70ea41
+CTRL+C - Operation aborted
+u-boot=> 
+----
+
+* icon:floppy[]  Use host machine to copy the partition image. Copy partition
+image with `ddrescue`:
+
+[source,console]
+----
+$ sudo dmesg |tail
+usb 5-5.1: SerialNumber: 0d2069d6dd93540e
+usb-storage 5-5.1:1.0: USB Mass Storage device detected
+scsi host14: usb-storage 5-5.1:1.0
+scsi 14:0:0:0: Direct-Access     Linux    UMS disk 0       ffff PQ: 0 ANSI: 2
+sd 14:0:0:0: Attached scsi generic sg4 type 0
+sd 14:0:0:0: [sdf] 2097152 512-byte logical blocks: (1.07 GB/1.00 GiB)
+sd 14:0:0:0: [sdf] Write Protect is off
+sd 14:0:0:0: [sdf] Mode Sense: 0f 00 00 00
+sd 14:0:0:0: [sdf] Write cache: enabled, read cache: enabled, doesn't support DPO or FUA
+sd 14:0:0:0: [sdf] Attached SCSI removable disk
+
+$ sudo ddrescue -Df /dev/sdf file.img
+GNU ddrescue 1.23
+Press Ctrl-C to interrupt
+     ipos:    1073 MB, non-trimmed:        0 B,  current rate:  13041 kB/s
+     opos:    1073 MB, non-scraped:        0 B,  average rate:  25565 kB/s
+non-tried:        0 B,  bad-sector:        0 B,    error rate:       0 B/s
+  rescued:    1073 MB,   bad areas:        0,        run time:         41s
+pct rescued:  100.00%, read errors:        0,  remaining time:         n/a
+                              time since last successful read:         n/a
+Finished
+----
+
+Reference: https://docs.u-boot.org/en/v2021.07/usage/ums.html
+
+* We’ve obtained a copy of the corrupted image — let’s begin analyzing it.
+
+== icon:search[] Inspect file.img with debugfs
+
+* How to use debugfs?
+
+[source,console]
+----
+sudo debugfs file.img
+----
+
+* icon:folder[] Use `ls -lr` to find the last modified file:
+
+[source,console]
+----
+      2   40755 (2)      0      0    4096  3-Mar-2023 04:49 .
+      2   40755 (2)      0      0    4096  3-Mar-2023 04:49 ..
+    .....
+    .....
+    172   40755 (2)      0      0    4096  9-Mar-2018 07:34 boot
+    175   40755 (2)      0      0    4096  9-Mar-2018 07:34 dev
+    176   40755 (2)      0      0    4096 18-Mar-2023 10:25 etc <<<<<
+   1037   40755 (2)      0      0    4096  9-Mar-2018 07:34 home
+----
+
+* icon:file[] Dump inode for more info:
+
+[source,console]
+----
+debugfs:  stat <24365>
+Inode: 24365   Type: regular    Mode:  0644   Flags: 0x80000
+Generation: 2938999718    Version: 0x00000000:00000001
+User:     0   Group:     0   Project:     0   Size: 279
+File ACL: 0
+Links: 1   Blockcount: 8
+Fragment:  Address: 0    Number: 0    Size: 0
+ ctime: 0x6415c9cb:ae788608 -- Sat Mar 18 10:25:15 2023
+ atime: 0x6415c9d6:069983c0 -- Sat Mar 18 10:25:26 2023
+ mtime: 0x6415c9cb:ac903f48 -- Sat Mar 18 10:25:15 2023
+crtime: 0x6415c9cb:ac903f48 -- Sat Mar 18 10:25:15 2023
+Size of extra inode fields: 32
+Inode checksum: 0x3a0e8a44
+EXTENTS:
+(0):204805
+----
+
+* icon:clipboard[] Dump journal transaction details:
+
+[source,console]
+----
+debugfs:  logdump -aO
+Found expected sequence 212, type 2 (commit block) at block 151
+....
+Found expected sequence 216, type 1 (descriptor block) at block 174
+Dumping descriptor block, sequence 216, at block 174:
+  FS block 469 logged at journal block 175 (flags 0x0)
+  FS block 530806 logged at journal block 185 (flags 0x2)
+  FS block 8514 logged at journal block 186 (flags 0xa)
+Found expected sequence 216, type 2 (commit block) at block 187
+----
+
+* Map FS block → inode → file:
+
+[source,console]
+----
+debugfs> icheck 530804
+530804 127748 <<< inode number
+debugfs> ncheck 127748
+127748 /root/.cache/gstreamer-1.0
+----
+
+== icon:exclamation-triangle[] Journal Sequence Corruption (Transaction 216)
+
+icon:search[] **Analyse**
+
+....
+Found expected sequence 216, type 1 (descriptor block) at block
+Dumping descriptor block, sequence 216, at block 174:
+FS block 469 logged at journal block 175 (flags 0x0)
+FS block 1 logged at journal block 176 (flags 0x2)
+FS block 515 logged at journal block 177 (flags 0x2)
+FS block 1663 logged at journal block 178 (flags 0x2)
+FS block 139263 logged at journal block 179 (flags 0x2)
+FS block 459 logged at journal block 180 (flags 0x2)
+FS block 548 logged at journal block 181 (flags 0x2)
+FS block 8501 logged at journal block 182 (flags 0x2)
+FS block 524301 logged at journal block 183 (flags 0x2)
+FS block 524314 logged at journal block 184 (flags 0x2)
+FS block 530806 logged at journal block 185 (flags 0x2)
+FS block 8514 logged at journal block 186 (flags 0xa)
+Found expected sequence 216, type 2 (commit block) at block
+Found sequence 187 (not 217) at block 188: end of journal. <<<<<<<< Issue
+Found expected sequence 187, type 2 (commit block) at block 
+Found sequence 188 (not 218) at block 189: end of journal.  <<<<<<<< Issue
+Found expected sequence 188, type 1 (descriptor block) at block
+....
+
+icon:exclamation-triangle[] **Observation**
+
+* Transaction 216 (descriptor + commit) completed ✅
+* Next expected transaction 217, but journal jumps to 187 ❌
+* Sequence wrap-around indicates premature reset or overwritten tail blocks
+
+icon:lightbulb[] **Root cause hypotheses:**
+
+1. Power cut during journal writeback  
+2. Partial block update or DMA write failure  
+3. JBD2 transaction pointer corruption
+
+....
+* Transaction 216 is complete (descriptor + commit). ✅
+* The next expected transaction should be 217, but instead the journal suddenly
+jumps to 187. ❌ 
+* That wrap-around (187 < 216) signals that the journal sequence number reset
+prematurely, or the ring buffer pointer wrapped incorrectly.
+* Then it tries to read further but again sees 188, not 218, confirming sequence
+corruption or overwritten tail blocks.
+....
+
+== icon:bug[] Use GDB to Debug Further
+
+* icon:terminal[] Dump `descriptor_block`, `data_block`, and `commit_block`.
+
+Reference: https://elixir.bootlin.com/linux/v6.1.22/source/fs/jbd2/recovery.c#L201
+
+[source,console]
+....
+(gdb)
+Continuing.
+
+t_blocknr = 0xb6020000
+	0x000002b6 => 694 decimal => FS Block Size
+t_flags = 0x200
+	0x0002 => flags 02
+sequence_nr = 0xffffffffffffffcf
+	0xcf => 200
+....
+
+* This provides valuable information; we can proceed to set a breakpoint to
+capture the exact commit block.
+
+--
+* FS Block:         649
+* Flag:             0x2
+* Sequence Number:  200
+--
+
+* Dump `Commit_time` to map it with the last modified file. 
+....
+Breakpoint 4, do_one_pass (journal=journal@entry=0xffff888003b03000, info=info@entry=0xffffc90000013bc4, pass=pass@entry=PASS_SCAN) at fs/jbd2/recovery.c:744
+744                             commit_time = be64_to_cpu(
+
+==== JBD2_COMMIT_BLOCK ====
+
+---- Block Number ----
+$274 = 188
+
+---- Sequence number ----
+$275 = 216
+(gdb) p commit_time
+$277 = 1679149590
+(gdb) p/x commit_time
+$278 = 0x6415ca16
+(gdb)
+....
+
+* icon:calendar-alt[] Use the `date` command to display the output in a
+human-readable format.
+
+[source,console]
+----
+$ date -d @1679149590
+Sat 18 Mar 2023 10:26:30 AM EDT
+----
+
+* icon:check-circle[] Dump `Checksum` of each commit block, especially transaction 216:
+
+[source,console]
+----
+jbd2_commit_block_csum_verify (buf=<optimized out>, j=<optimized out>) at fs/jbd2/recovery.c:433
+433             provided = h->h_chksum[0];
+(gdb) list
+429             if (!jbd2_journal_has_csum_v2or3(j))
+430                     return 1;
+431
+432             h = buf;
+433             provided = h->h_chksum[0];
+434             h->h_chksum[0] = 0;
+435             calculated = jbd2_chksum(j, j->j_csum_seed, buf, j->j_blocksize);
+436             h->h_chksum[0] = provided;
+437
+438             return provided == cpu_to_be32(calculated);
+(gdb)
+(gdb)
+==== JBD2_COMMIT_BLOCK ====
+
+---- Block Number ----
+$414 = 188
+
+---- Sequence number ----
+$415 = 216
+
+---- Commit Time ----
+$416 = 1679149590
+
+---- Last Trans Compile Time ----
+$417 = 1679149588
+(gdb) 
+Continuing.
+
+Breakpoint 5, jbd2_commit_block_csum_verify (buf=<optimized out>, j=<optimized out>) at fs/jbd2/recovery.c:436
+436             h->h_chksum[0] = provided;
+$418 = 0x6f3d7f01
+$419 = 0x40ed4c99
+(gdb) 
+Continuing.
+(gdb)
+----
+
+[NOTE]
+icon:exclamation-triangle[] Ah! This appears to be the issue. The checksums are
+clearly failing to match, causing the problem.
+
+* Transaction 216  
+* Provided Checksum: 0x40ed4c99  
+* Calculated Checksum: 0x6f3d7f01
+
+[.text-center]
+icon:terminal[] **GDB Commands Used**
+
+To debug and inspect the journal recovery process, the following `gdb` breakpoints and commands were set:
+
+```bash
+(gdb) b fs/jbd2/recovery.c:455
+Breakpoint 1 at 0xffffffff81aea45d: file fs/jbd2/recovery.c, line 455.
+
+(gdb) b fs/jbd2/recovery.c:430
+Breakpoint 2 at 0xffffffff81aea331: file fs/jbd2/recovery.c, line 430.
+
+(gdb) commands 1
+Type commands for breakpoint(s) 1, one per line.
+End with a line saying just "end".
+> p/x provided
+> p/x ((calculated & 0xff) << 24) | ((calculated & 0xff00) << 8) | ((calculated & 0xff0000) >> 8) | ((calculated & 0xff000000) >> 24)
+> end
+
+(gdb) commands 2
+Type commands for breakpoint(s) 2, one per line.
+End with a line saying just "end".
+> p/x provided
+> p/x ((calculated & 0xff) << 24) | ((calculated & 0xff00) << 8) | ((calculated & 0xff0000) >> 8) | ((calculated & 0xff000000) >> 24)
+> end
+
+(gdb) c
+Continuing.
+```
+
+== icon:clipboard-list[] Detailed logs of checksum comparision using GDB
+
+[source,console]
+----
+(gdb) b fs/jbd2/recovery.c:455
+Breakpoint 1 at 0xffffffff81aea45d: file fs/jbd2/recovery.c, line 455.
+(gdb) b fs/jbd2/recovery.c:430
+Breakpoint 2 at 0xffffffff81aea331: file fs/jbd2/recovery.c, line 430.
+(gdb) commands 1
+Type commands for breakpoint(s) 1, one per line.
+End with a line saying just "end".
+>p/x provided
+>p/x ((calculated & 0xff) << 24) | ((calculated & 0xff00) << 8) | ((calculated & 0xff0000) >> 8) | ((calculated & 0xff000000) >> 24)
+>end
+(gdb) commands 2
+Type commands for breakpoint(s) 2, one per line.
+End with a line saying just "end".
+>p/x provided
+>p/x ((calculated & 0xff) << 24) | ((calculated & 0xff00) << 8) | ((calculated & 0xff0000) >> 8) | ((calculated & 0xff000000) >> 24)
+>end
+(gdb) c
+Continuing.
+
+Breakpoint 2, jbd2_commit_block_csum_verify (buf=<optimized out>, j=<optimized out>) at fs/jbd2/recovery.c:430
+430             printk(KERN_ERR "JBD2: commit header checksum verification\n");
+$1 = 0x67b1c9a3
+$2 = 0x67b1c9a3 <<<<<<<<<<199 Commit block checksum
+(gdb) 
+Continuing.
+
+Breakpoint 2, jbd2_commit_block_csum_verify (buf=<optimized out>, j=<optimized out>) at fs/jbd2/recovery.c:430
+430             printk(KERN_ERR "JBD2: commit header checksum verification\n");
+$3 = 0xa83f5c01
+$4 = 0xa83f5c01 <<<<<<<<<<200 Commit block checksum
+(gdb) 
+Continuing.
+
+Breakpoint 2, jbd2_commit_block_csum_verify (buf=<optimized out>, j=<optimized out>) at fs/jbd2/recovery.c:430
+430             printk(KERN_ERR "JBD2: commit header checksum verification\n");
+$5 = 0xccfb622
+$6 = 0xccfb622 <<<<<<<<<<201 Commit block checksum
+(gdb) 
+Continuing.
+
+Breakpoint 2, jbd2_commit_block_csum_verify (buf=<optimized out>, j=<optimized out>) at fs/jbd2/recovery.c:430
+430             printk(KERN_ERR "JBD2: commit header checksum verification\n");
+$7 = 0x9e4e49e1
+$8 = 0x9e4e49e1 <<<<<<<<<<202 Commit block checksum
+(gdb) 
+Continuing.
+
+Breakpoint 2, jbd2_commit_block_csum_verify (buf=<optimized out>, j=<optimized out>) at fs/jbd2/recovery.c:430
+430             printk(KERN_ERR "JBD2: commit header checksum verification\n");
+$9 = 0xba0d9629
+$10 = 0xba0d9629 <<<<<<<<<<203 Commit block checksum
+(gdb) 
+Continuing.
+
+Breakpoint 2, jbd2_commit_block_csum_verify (buf=<optimized out>, j=<optimized out>) at fs/jbd2/recovery.c:430
+430             printk(KERN_ERR "JBD2: commit header checksum verification\n");
+$11 = 0x53b45195
+$12 = 0x53b45195 <<<<<<<<<<204 Commit block checksum
+(gdb) 
+Continuing.
+
+Breakpoint 2, jbd2_commit_block_csum_verify (buf=<optimized out>, j=<optimized out>) at fs/jbd2/recovery.c:430
+430             printk(KERN_ERR "JBD2: commit header checksum verification\n");
+$13 = 0x8da0bff8
+$14 = 0x8da0bff8 <<<<<<<<<<205 Commit block checksum
+(gdb) 
+Continuing.
+
+Breakpoint 2, jbd2_commit_block_csum_verify (buf=<optimized out>, j=<optimized out>) at fs/jbd2/recovery.c:430
+430             printk(KERN_ERR "JBD2: commit header checksum verification\n");
+$15 = 0xd288eb3c
+$16 = 0xd288eb3c <<<<<<<<<<206 Commit block checksum
+(gdb) 
+Continuing.
+
+Breakpoint 2, jbd2_commit_block_csum_verify (buf=<optimized out>, j=<optimized out>) at fs/jbd2/recovery.c:430
+430             printk(KERN_ERR "JBD2: commit header checksum verification\n");
+$17 = 0x9dd8d5b2
+$18 = 0x9dd8d5b2 <<<<<<<<<<207 Commit block checksum
+(gdb) 
+Continuing.
+
+Breakpoint 2, jbd2_commit_block_csum_verify (buf=<optimized out>, j=<optimized out>) at fs/jbd2/recovery.c:430
+430             printk(KERN_ERR "JBD2: commit header checksum verification\n");
+$19 = 0xc9391ec8
+$20 = 0xc9391ec8<<<<<<<<<<208 Commit block checksum
+(gdb) 
+Continuing.
+
+Breakpoint 2, jbd2_commit_block_csum_verify (buf=<optimized out>, j=<optimized out>) at fs/jbd2/recovery.c:430
+430             printk(KERN_ERR "JBD2: commit header checksum verification\n");
+$21 = 0xf23b95d2
+$22 = 0xf23b95d2<<<<<<<<<<209 Commit block checksum
+(gdb) 
+Continuing.
+
+Breakpoint 2, jbd2_commit_block_csum_verify (buf=<optimized out>, j=<optimized out>) at fs/jbd2/recovery.c:430
+430             printk(KERN_ERR "JBD2: commit header checksum verification\n");
+$23 = 0x5d9c1f95
+$24 = 0x5d9c1f95<<<<<<<<<<210 Commit block checksum
+(gdb) 
+Continuing.
+
+Breakpoint 2, jbd2_commit_block_csum_verify (buf=<optimized out>, j=<optimized out>) at fs/jbd2/recovery.c:430
+430             printk(KERN_ERR "JBD2: commit header checksum verification\n");
+$25 = 0xebb3fdc
+$26 = 0xebb3fdc<<<<<<<<<<211 Commit block checksum
+(gdb) 
+Continuing.
+
+Breakpoint 2, jbd2_commit_block_csum_verify (buf=<optimized out>, j=<optimized out>) at fs/jbd2/recovery.c:430
+430             printk(KERN_ERR "JBD2: commit header checksum verification\n");
+$27 = 0x1fdb442
+$28 = 0x1fdb442<<<<<<<<<<212 Commit block checksum
+(gdb) 
+Continuing.
+
+Breakpoint 2, jbd2_commit_block_csum_verify (buf=<optimized out>, j=<optimized out>) at fs/jbd2/recovery.c:430
+430             printk(KERN_ERR "JBD2: commit header checksum verification\n");
+$29 = 0xd3bbf9f
+$30 = 0xd3bbf9f<<<<<<<<<<213 Commit block checksum
+(gdb) 
+Continuing.
+
+Breakpoint 2, jbd2_commit_block_csum_verify (buf=<optimized out>, j=<optimized out>) at fs/jbd2/recovery.c:430
+430             printk(KERN_ERR "JBD2: commit header checksum verification\n");
+$31 = 0xf4164ac9
+$32 = 0xf4164ac9<<<<<<<<<<214 Commit block checksum
+(gdb) 
+Continuing.
+
+Breakpoint 2, jbd2_commit_block_csum_verify (buf=<optimized out>, j=<optimized out>) at fs/jbd2/recovery.c:430
+430             printk(KERN_ERR "JBD2: commit header checksum verification\n");
+$33 = 0x91a54af2
+$34 = 0x91a54af2<<<<<<<<<<215 Commit block checksum
+(gdb) 
+Continuing.
+
+Breakpoint 2, jbd2_commit_block_csum_verify (buf=<optimized out>, j=<optimized out>) at fs/jbd2/recovery.c:430
+430             printk(KERN_ERR "JBD2: commit header checksum verification\n");
+$35 = 0x40ed4c99 <<<<<<<< Value from Commit header
+$36 = 0x6f3d7f01<<<<Calculated Value <<<<<<<<<<216 Commit block checksum (Mismatch)
+Only partial data (a single block) has been written. Let's calculate the checksum of the commit header—if it is correct, this indicates that the data itself was not properly written due to the power shutdown.
+(gdb) 
+Continuing.
+
+Breakpoint 1, jbd2_commit_block_csum_verify_partial (buf=<optimized out>, j=0xffff888003b03000) at fs/jbd2/recovery.c:455
+455     printk(KERN_ERR "Partial: JBD2: commit header checksum verification\n");
+$37 = 0x40ed4c99  <<<<<<<< Value from Commit header
+$38 = 0x40ed4c99 <<<<<<<<<216 The commit header check matches, which means we can continue with the replay.
+(gdb)
+
+----
+
+[[ext4-journal-big-picture]]
+== icon:project-diagram[] EXT4 Journal Big Picture
+Let's understand journaling from the basics.  
+
+It is recommended to read the kernel documentation for more details:  
+link:https://www.kernel.org/doc/Documentation/filesystems/ext4/journal.rst[EXT4 Journal Documentation]
+
+[.text-center]
+[source,ascii]
+----
++-------------------+
+|   Superblock      |
+|  (journal_header) |
++-------------------+
+          |
+          v
++-------------------+
+|  Descriptor Block |
+|  (journal_header) |
++-------------------+
+          |
+          v
++-------------------+
+|    Data Block(s)  |
+|  (journal_header) |
++-------------------+
+          |
+          v
++-------------------+
+|    Commit Block   |
+|  (journal_header) |
++-------------------+
+          |
+          v
++-------------------+
+|  Descriptor Block |
+|  (journal_header) |
++-------------------+
+          |
+         ...
+----
+
+* **Superblock**  
+* **Descriptor block** (followed by **data blocks** or a **revocation block**)  
+* Additional data or revocations  
+* **Commit block**  
+* [More transactions…]
+
+Each transaction begins with either a **descriptor block with data** or a
+**revocation block**. A completed transaction **always ends with a commit block**.
+
+=== Block Header
+Every block in the EXT4 journal begins with a **common 12-byte header** defined
+by `struct journal_header_s`:
+
+Every journal block begins with a standard 12-byte header called `journal_header_s`:
+
+[.text-center]
+----
++-----------------+-----------------+-----------------+
+| Offset 0x0      | Offset 0x4      | Offset 0x8      |
++-----------------+-----------------+-----------------+
+| h_magic         | h_blocktype     | h_sequence      |
+| (Magic number)  | (Block type)    | (Transaction ID)|
++-----------------+-----------------+-----------------+
+----
+
+* A journal block can be one of the following types:
+
+[.text-center]
+----
++-------+-----------------------------------------------+
+| Value | Description                                   |
++-------+-----------------------------------------------+
+| 1     | Descriptor Block                              |
+|       | -> Precedes a set of data blocks in a txn.   |
++-------+-----------------------------------------------+
+| 2     | Commit Block                                  |
+|       | -> Marks the completion of a transaction.    |
++-------+-----------------------------------------------+
+| 3     | Superblock v1                                 |
+|       | -> Journal metadata for version 1.           |
++-------+-----------------------------------------------+
+| 4     | Superblock v2                                 |
+|       | -> Journal metadata for version 2.           |
++-------+-----------------------------------------------+
+| 5     | Revocation Block                              |
+|       | -> Lists blocks overwritten, enables faster  |
+|       |    recovery.                                  |
++-------+-----------------------------------------------+
+----
+
+....
+(gdb) p * (journal_header_t *)bh->b_data
+$62 = {
+  h_magic = 2553887680,
+  h_blocktype = 33554432, <<<<< 02
+  h_sequence = 3623878656  <<<< be32_to_cpu 216
+}
+....
+
+=== Superblock 
+
+The journal superblock is simpler than the EXT4 superblock. It primarily keeps track of the journal size and the starting point of the transaction log.
+
+The journal superblock is recorded as `struct journal_superblock_s`, which is **1024 bytes long**.
+
+Each superblock begins with a common header (`journal_header_t`) followed by static and dynamic fields:
+
+[cols="1,1,1,1", options="header"]
+|===
+| Offset | Type | Name | Description
+
+| 0x0 | journal_header_t (12 bytes) | s_header | Common header identifying this as a superblock.
+| 0xC | __be32 | s_blocksize | Journal device block size.
+| 0x10 | __be32 | s_maxlen | Total number of blocks in this journal.
+| 0x14 | __be32 | s_first | First block of log information.
+
+| 0x18 | __be32 | s_sequence | First commit ID expected in log.
+| 0x1C | __be32 | s_start | Block number of the start of log. Zero does **not** imply a clean journal.
+| 0x20 | __be32 | s_errno | Error value, set by jbd2_journal_abort().
+
+| 0x24 | __be32 | s_feature_compat | Compatible feature set.
+| 0x28 | __be32 | s_feature_incompat | Incompatible feature set.
+| 0x2C | __be32 | s_feature_ro_compat | Read-only compatible feature set.
+| 0x30 | __u8[16] | s_uuid | 128-bit UUID for the journal, compared at mount time.
+
+| 0x40 | __be32 | s_nr_users | Number of file systems sharing this journal.
+| 0x44 | __be32 | s_dynsuper | Location of dynamic superblock copy (if any).
+| 0x48 | __be32 | s_max_transaction | Limit of journal blocks per transaction (optional).
+| 0x4C | __be32 | s_max_trans_data | Limit of data blocks per transaction (optional).
+
+| 0x50 | __u8 | s_checksum_type | Checksum algorithm used for the journal.
+| 0x51 | __u8[3] | s_padding2 | Padding bytes.
+| 0x54 | __be32 | s_num_fc_blocks | Number of fast commit blocks in the journal.
+| 0x58 | __be32 | s_head | Block number of the head (first unused block) of the journal.
+
+| 0x5C | __u32[40] | s_padding | Reserved/padding fields.
+| 0xFC | __be32 | s_checksum | Checksum of the entire superblock (field set to zero before calculation).
+| 0x100 | __u8[16*48] | s_users | IDs of all file systems sharing the journal.
+|===
+
+[NOTE]
+====
+This structure contains both static information (defining the journal) and dynamic
+information (current state of the journal). Fields marked optional may not
+always be used.
+====
+
+=== Descriptor Block
+
+The **Descriptor Block** lists the final locations of data blocks that follow in the journal.  
+It is mostly open-coded but follows this structure:
+
+[cols="1,1,1", options="header"]
+|===
+| Offset | Type | Description
+
+| 0x0 | journal_header_t | Common block header
+| 0xC | struct journal_block_tag_s array[] | Tags describing the locations of data blocks; fills the rest of the block
+|===
+
+If `JBD2_FEATURE_INCOMPAT_CSUM_V3` is enabled, each journal block tag uses `struct journal_block_tag3_s`:
+
+[cols="1,1,1", options="header"]
+|===
+| Offset | Name | Description
+
+| 0x0 | t_blocknr | Lower 32-bits of the disk location for the corresponding data block
+| 0x4 | t_flags | Flags for the descriptor (see jbd2_tag_flags)
+| 0x8 | t_blocknr_high | Upper 32-bits of the disk location (zero if 64-bit feature not enabled)
+| 0xC | t_checksum | Checksum of UUID, sequence number, and data block
+| 0x8/0xC | uuid[16] | UUID associated with this tag; only used if “same UUID” flag is not set
+|===
+
+*Notes:*  
+
+* Descriptor blocks use at least 36 bytes but occupy a full journal block.  
+* Tags can be either 16 or 32 bytes depending on features and flags.  
+
+== Data Block
+
+**Data Blocks** contain the actual filesystem data written to disk through the journal.  
+They are placed directly after their corresponding **Descriptor Block**.
+
+== Commit Block
+
+The **Commit Block** marks the completion of a journal transaction.  
+Once written, the transaction's data can safely be applied to their final disk locations.
+
+It is defined by `struct commit_header` (32 bytes, occupies a full block):
+
+* **Header (`journal_header_s`)** – Common block header.
+* **Checksum type (`h_chksum_type`)** – Type of checksum for verifying data integrity.
+* **Checksum size (`h_chksum_size`)** – Number of bytes used by the checksum.
+* **Padding (`h_padding`)** – Reserved bytes.
+* **Checksums (`h_chksum`)** – 32 bytes storing transaction checksums.
+* **Commit time (`h_commit_sec` + `h_commit_nsec`)** – Timestamp of transaction commit.
+
+....
+(gdb) p * (struct commit_header *) (bh->b_data)
+$66 = {
+  h_magic = 2553887680,
+  h_blocktype = 33554432,
+  h_sequence = 3623878656,
+  h_chksum_type = 0 '\000',
+  h_chksum_size = 0 '\000',
+  h_padding = "\000",
+  h_chksum = {1089293465, 0, 0, 0, 0, 0, 0, 0},
+  h_commit_sec = 1642148533370880000,
+  h_commit_nsec = 4125055546
+}
+(gdb) ptype (struct commit_header *) (bh->b_data)
+type = struct commit_header {
+    __be32 h_magic;
+    __be32 h_blocktype;
+    __be32 h_sequence;
+    unsigned char h_chksum_type;
+    unsigned char h_chksum_size;
+    unsigned char h_padding[2];
+    __be32 h_chksum[8];
+    __be64 h_commit_sec;
+    __be32 h_commit_nsec;
+} *
+....
+
+
+== icon:book[] References
+--
+* https://www.kernel.org/doc/html/latest/filesystems/ext4/journal.html
+--
+
+[NOTE]
+--
+This experiment was performed on **Linux kernel version 6.1.22**.  
+
+The issue has been resolved in later kernel releases.  
+
+See the relevant patch here: 
+link:https://patchwork.ozlabs.org/project/linux-ext4/patch/20240402090951.527619-1-yebin10@huawei.com/#3290959[Patch]
+--
