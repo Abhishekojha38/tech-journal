@@ -12,6 +12,11 @@ reference materials.
 - **[KGDB](./kgdb/kgdb.md)** — Kernel debugging setup and usage details,
 including configuration, commands, and workflow examples.
 
+- **[Ext4-journal](./ext4-journal/ext4_journal_recovery_bug.adoc)** — Deep dive into EXT4 journal corruption analysis,
+  checksum mismatches, and debugging using `GDB`.  
+  Includes reproduction steps, kernel insights, and references to upstream patches
+  (e.g., commit fix for kernel `6.1.22`).
+
 ## 🚧 Work in Progress
 
 This journal is continuously evolving as I explore new areas.  
