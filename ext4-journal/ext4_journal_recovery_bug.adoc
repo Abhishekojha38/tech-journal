@@ -12,7 +12,7 @@
 See the section <<ext4-journal-big-picture,EXT4 Journal Big Picture>> for an
 overview.
 
-== icon:bug[] Let's take a closer look at the bug
+== Let's take a closer look at the bug
 
 
 During the boot process, the kernel attempts to mount the *EXT4 root filesystem*.  
@@ -27,11 +27,11 @@ JBD2: journal transaction 216 on mmcblk0p3-8 is corrupt.
 EXT4-fs (mmcblk0p3): error loading journal
 VFS: Cannot open root device "mmcblk0p3" or unknown-block(179,3): error -117
 ----
-icon:exclamation-triangle[] **Warning:** Mount failed due to corrupted journal.
+**Warning:** Mount failed due to corrupted journal.
 
-=== icon:search[] Analysis from logs
+=== Analysis from logs
 
-icon:info-circle[]That kernel message means a JBD2 (journaling) transaction in
+That kernel message means a JBD2 (journaling) transaction in
 the filesystem journal is corrupted — the kernel tried to replay transaction
 *216* for partition */dev/mmcblk0p3* (journal device mmcblk0p3-8) and
 found it invalid, so recovery failed and the rootfs cannot be mounted
@@ -45,10 +45,10 @@ it impossible to reproduce or properly debug the issue.
 
 **We have a malfunctioning board on hand; let's begin investigating the issue.**
 
-=== icon:usb[] Copy rootfs using U-Boot UMS
+=== Copy rootfs using U-Boot UMS
 
 * Ensure automounting is disabled on the host.
-* icon:terminal[] U-Boot commands:
+* U-Boot commands:
 
 [source,console]
 ----
@@ -75,7 +75,7 @@ CTRL+C - Operation aborted
 u-boot=> 
 ----
 
-* icon:floppy[]  Use host machine to copy the partition image. Copy partition
+* Use host machine to copy the partition image. Copy partition
 image with `ddrescue`:
 
 [source,console]
@@ -108,7 +108,7 @@ Reference: https://docs.u-boot.org/en/v2021.07/usage/ums.html
 
 * We’ve obtained a copy of the corrupted image — let’s begin analyzing it.
 
-== icon:search[] Inspect file.img with debugfs
+== Inspect file.img with debugfs
 
 * How to use debugfs?
 
@@ -117,7 +117,7 @@ Reference: https://docs.u-boot.org/en/v2021.07/usage/ums.html
 sudo debugfs file.img
 ----
 
-* icon:folder[] Use `ls -lr` to find the last modified file:
+* Use `ls -lr` to find the last modified file:
 
 [source,console]
 ----
@@ -129,9 +129,18 @@ sudo debugfs file.img
     175   40755 (2)      0      0    4096  9-Mar-2018 07:34 dev
     176   40755 (2)      0      0    4096 18-Mar-2023 10:25 etc <<<<<
    1037   40755 (2)      0      0    4096  9-Mar-2018 07:34 home
+
+  Inode No. | Perm
+    24365  100644 (1)      0      0     279 18-Mar-2023 10:25 wpa_supplicant.conf<<<<<<<<<<
+     1025  100644 (1)      0      0     681  9-Mar-2018 07:34 xattr.con
+     1026   40755 (2)      0      0    4096  9-Mar-2018 07:34 xdg
+    24393  100600 (1)      0      0       0  3-Mar-2023 04:49 .pwd.lock
+    24395   40000 (2)      0      0    4096  3-Mar-2023 04:49 credstore
+    24396   40000 (2)      0      0    4096  3-Mar-2023 04:49 credstore.encrypted
+      464  100644 (1)      0      0      44 18-Mar-2023 10:24 adjtime <<<<<<<<<<<<<<  
 ----
 
-* icon:file[] Dump inode for more info:
+* Dump inode for more info:
 
 [source,console]
 ----
@@ -152,7 +161,7 @@ EXTENTS:
 (0):204805
 ----
 
-* icon:clipboard[] Dump journal transaction details:
+* Dump journal transaction details:
 
 [source,console]
 ----
@@ -177,9 +186,9 @@ debugfs> ncheck 127748
 127748 /root/.cache/gstreamer-1.0
 ----
 
-== icon:exclamation-triangle[] Journal Sequence Corruption (Transaction 216)
+== Journal Sequence Corruption (Transaction 216)
 
-icon:search[] **Analyse**
+**Analyse**
 
 ....
 Found expected sequence 216, type 1 (descriptor block) at block
@@ -203,13 +212,13 @@ Found sequence 188 (not 218) at block 189: end of journal.  <<<<<<<< Issue
 Found expected sequence 188, type 1 (descriptor block) at block
 ....
 
-icon:exclamation-triangle[] **Observation**
+**Observation**
 
 * Transaction 216 (descriptor + commit) completed ✅
 * Next expected transaction 217, but journal jumps to 187 ❌
 * Sequence wrap-around indicates premature reset or overwritten tail blocks
 
-icon:lightbulb[] **Root cause hypotheses:**
+**Root cause hypotheses:**
 
 1. Power cut during journal writeback  
 2. Partial block update or DMA write failure  
@@ -225,14 +234,45 @@ prematurely, or the ring buffer pointer wrapped incorrectly.
 corruption or overwritten tail blocks.
 ....
 
-== icon:bug[] Use GDB to Debug Further
+== Use GDB to Debug Further
 
-* icon:terminal[] Dump `descriptor_block`, `data_block`, and `commit_block`.
+* Dump `descriptor_block`, `data_block`, and `commit_block`.
 
 Reference: https://elixir.bootlin.com/linux/v6.1.22/source/fs/jbd2/recovery.c#L201
 
 [source,console]
 ....
+  (gdb) p *(journal_header_t *) bh->b_data
+  $55 = {
+    h_magic = 2553887680,
+    h_blocktype = 16777216,
+    h_sequence = 3623878656
+  }
+  (gdb) p * (struct commit_header *) (bh->b_data)
+  $66 = {
+    h_magic = 2553887680,
+    h_blocktype = 33554432,
+    h_sequence = 3623878656,
+    h_chksum_type = 0 '\000',
+    h_chksum_size = 0 '\000',
+    h_padding = "\000",
+    h_chksum = {1089293465, 0, 0, 0, 0, 0, 0, 0},
+    h_commit_sec = 1642148533370880000,
+    h_commit_nsec = 4125055546
+  }
+  (gdb) ptype (struct commit_header *) (bh->b_data)
+  type = struct commit_header {
+      __be32 h_magic;
+      __be32 h_blocktype;
+      __be32 h_sequence;
+      unsigned char h_chksum_type;
+      unsigned char h_chksum_size;
+      unsigned char h_padding[2];
+      __be32 h_chksum[8];
+      __be64 h_commit_sec;
+      __be32 h_commit_nsec;
+  } *
+  (gdb
 (gdb)
 Continuing.
 
@@ -272,7 +312,7 @@ $278 = 0x6415ca16
 (gdb)
 ....
 
-* icon:calendar-alt[] Use the `date` command to display the output in a
+* Use the `date` command to display the output in a
 human-readable format.
 
 [source,console]
@@ -281,7 +321,7 @@ $ date -d @1679149590
 Sat 18 Mar 2023 10:26:30 AM EDT
 ----
 
-* icon:check-circle[] Dump `Checksum` of each commit block, especially transaction 216:
+* Dump `Checksum` of each commit block, especially transaction 216:
 
 [source,console]
 ----
@@ -326,7 +366,7 @@ Continuing.
 ----
 
 [NOTE]
-icon:exclamation-triangle[] Ah! This appears to be the issue. The checksums are
+Ah! This appears to be the issue. The checksums are
 clearly failing to match, causing the problem.
 
 * Transaction 216  
@@ -334,7 +374,7 @@ clearly failing to match, causing the problem.
 * Calculated Checksum: 0x6f3d7f01
 
 [.text-center]
-icon:terminal[] **GDB Commands Used**
+**GDB Commands Used**
 
 To debug and inspect the journal recovery process, the following `gdb` breakpoints and commands were set:
 
@@ -363,7 +403,7 @@ End with a line saying just "end".
 Continuing.
 ```
 
-== icon:clipboard-list[] Detailed logs of checksum comparision using GDB
+== Detailed logs of checksum comparision using GDB
 
 [source,console]
 ----
@@ -521,8 +561,42 @@ $38 = 0x40ed4c99 <<<<<<<<<216 The commit header check matches, which means we ca
 
 ----
 
+**Conclusion of Bug Analysis**
+
+During the investigation, we observed checksum mismatches in the commit block verification process.
+
+[source,console]
+....
+Breakpoint 2, jbd2_commit_block_csum_verify (buf=<optimized out>, j=<optimized out>) 
+at fs/jbd2/recovery.c:430
+430  printk(KERN_ERR "JBD2: commit header checksum verification\n");
+
+$35 = 0x40ed4c99   <<<<<<<< Value from Commit header  
+$36 = 0x6f3d7f01   <<<<<<<< Calculated Value (Mismatch for Transaction 216)
+....
+
+**Observation**
+Only partial data (a single block) was written.
+If the commit header checksum is valid, this indicates that the data blocks were
+not fully written, likely due to a power failure during the transaction.
+
+[source,console]
+....
+Breakpoint 1, jbd2_commit_block_csum_verify_partial (buf=<optimized out>, j=0xffff888003b03000) 
+at fs/jbd2/recovery.c:455
+455  printk(KERN_ERR "Partial: JBD2: commit header checksum verification\n");
+
+$37 = 0x40ed4c99  <<<<<<<< Value from Commit header  
+$38 = 0x40ed4c99  <<<<<<<< Calculated Value (Match for Transaction 216)
+....
+
+**Conclusion**
+The commit header checksum matches during partial verification, which confirms
+that the journal replay can safely proceed, as the header integrity remains
+intact.
+
 [[ext4-journal-big-picture]]
-== icon:project-diagram[] EXT4 Journal Big Picture
+== EXT4 Journal Big Picture
 Let's understand journaling from the basics.  
 
 It is recommended to read the kernel documentation for more details:  
@@ -748,7 +822,7 @@ type = struct commit_header {
 ....
 
 
-== icon:book[] References
+== References
 --
 * https://www.kernel.org/doc/html/latest/filesystems/ext4/journal.html
 --
