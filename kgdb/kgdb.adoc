@@ -1,0 +1,402 @@
+= KGDB - Debug Kernel
+
+== About KGDB
+Kgdb is intended to be used as a source level debugger for the Linux kernel. It
+is used along with gdb to debug a Linux kernel. The expectation is that gdb can
+be used to “break in” to the kernel to inspect memory, variables and look
+through call stack information similar to the way an application developer would
+use gdb to debug an application. It is possible to place breakpoints in kernel
+code and perform some limited execution stepping.
+
+== Kernel Configuration
+* `CONFIG_KGDB` to enable remote debugging.
+* `CONFIG_KGDB_SERIAL_CONSOLE` to allow gdb to access the serial console.
+* `CONFIG_KALLSYMS_ALL` add all symbols into the kernel image.
+* `CONFIG_MAGIC_SYSRQ` to be able to make sysrq.
+* `CONFIG_FRAME_POINTER` uses the frame pointer to save the stack information and backtrace.
+* `CONDIF_DEBUG_INFO` enable debug symbols
+* `CONFIG_GDB_SCRIPTS` enable gdb scripts
+
+
+== Required Tools
+* `Agent-proxy` is used to split the serial port into two: one for console and another for gdb.
+
+[source,bash]
+----
+git clone http://git.kernel.org/pub/scm/utils/kernel/kgdb/agent-proxy.git
+cd agent-proxy
+make
+----
+
+== Disable KASLR
+Kernel Address Space Layout Randomization (KASLR) randomizes the kernel’s memory
+layout at boot time.
+
+=== Through Kernel Configuration
+----
+CONFIG_RANDOMIZE_BASE=y
+----
+
+=== By Modifying Boot Arguments
+----
+setenv bootargs "${bootargs} nokaslr"
+saveenv
+----
+
+== Using lx-symbols in GDB
+If KASLR is disabled, load symbols:
+
+----
+(gdb) add-symbol-file vmlinux
+(gdb) lx-symbols
+----
+
+== DUT/QEMU Setup
+
+We will be using the link:https://github.com/Abhishekojha38/yocto-playground.git[yocto-playground]
+repository to create a **QEMU** setup and understand how **KGDB** works.
+
+* First, build the **playground-image** by following the steps provided in the
+`README.md` of the link:https://github.com/Abhishekojha38/yocto-playground.git[yocto-playground]
+repository.
+
+* Enable the kernel configurations.
+
+[source,bitbake]
+----
+bitbake -c menuconfig virtual/kernel
+----
+
+* After making the changes build the entire image and check the **vmlinux**
+
+[source,bash]
+----
+cd ${TOPDIR}/build/tmp/work/playground_x86-poky-linux/linux-playground/6.12.56/build
+file vmlinux
+----
+
+[source,logs]
+----
+vmlinux: ELF 64-bit LSB executable, x86-64, version 1 (SYSV), statically linked, BuildID[sha1]=146c10a69cb4f5349a44948f2e1254f79e7e815c, with debug_info, not stripped
+----
+
+* Launch QEMU with the options below to enable GDB debugging:
+
+[source,bash]
+----
+runqemu playground-x86 nographic slirp qemuparams="-s -S" bootparams="nokaslr"
+----
+
+Lets see what are these options.
+
+** nographic
+
+*** Disables the QEMU graphical console (no window)
+*** Output goes directly to your terminal.
+
+** slirp
+Uses user-mode networking (no root or tap setup required)
+Equivalent to:
+
+[source,options]
+----
+-netdev user,id=net0 -device e1000,netdev=net0
+----
+
+** qemuparams="-s -S"
+*** `-s` - Starts a GDB server inside QEMU on TCP port 1234. Listens for a GDB
+client on your host:
+
+[source,options]
+----
+-gdb tcp::1234
+----
+
+*** `-S` - Starts QEMU paused, waiting for GDB to attach. Allows you to set
+breakpoints before kernel execution.
+
+** bootparams="nokaslr"
+
+*** Disables Kernel Address Space Layout Randomization (KASLR).
+*** Ensures kernel symbols (e.g., start_kernel, do_initcalls) have fixed addresses
+*** Makes breakpoints and address lookups reliable
+
+[source,logs]
+----
+runqemu - INFO - Running MACHINE=playground-x86 bitbake -e  ...
+runqemu - INFO - Continuing with the following parameters:
+KERNEL: [/home/yocto/yocto-playground/build/tmp/deploy/images/playground-x86/bzImage]
+MACHINE: [playground-x86]
+FSTYPE: [ext4]
+ROOTFS: [/home/yocto/yocto-playground/build/tmp/deploy/images/playground-x86/playground-image-playground-x86.rootfs-20251114010330.ext4]
+CONFFILE: [/home/yocto/yocto-playground/build/tmp/deploy/images/playground-x86/playground-image-playground-x86.rootfs-20251114010330.qemuboot.conf]
+
+runqemu - INFO - Network configuration: ip=dhcp
+runqemu - INFO - Port forward: hostfwd=tcp:127.0.0.1:2222-:22 hostfwd=tcp:127.0.0.1:2323-:23
+runqemu - INFO - Running /home/yocto/yocto-playground/build/tmp/work/x86_64-linux/qemu-helper-native/1.0/recipe-sysroot-native/usr/bin/qemu-system-x86_64 -device virtio-net-pci,netdev=net0,mac=52:54:00:12:35:02 -netdev user,id=net0,hostfwd=tcp:127.0.0.1:2222-:22,hostfwd=tcp:127.0.0.1:2323-:23,tftp=/home/yocto/yocto-playground/build/tmp/deploy/images/playground-x86 -object rng-random,filename=/dev/urandom,id=rng0 -device virtio-rng-pci,rng=rng0 -drive file=/home/yocto/yocto-playground/build/tmp/deploy/images/playground-x86/playground-image-playground-x86.rootfs-20251114010330.ext4,if=virtio,format=raw -usb -device usb-tablet -usb -device usb-kbd   -cpu IvyBridge -machine q35,i8042=off -smp 4 -m 256  -s -S -serial mon:stdio -serial null -nographic  -kernel /home/yocto/yocto-playground/build/tmp/deploy/images/playground-x86/bzImage -append 'root=/dev/vda rw  mem=256M ip=dhcp console=ttyS0 console=ttyS1 oprofile.timer=1 tsc=reliable no_timer_check rcupdate.rcu_expedited=1 swiotlb=0 nokaslr'
+
+runqemu - INFO - Host uptime: 1154880.06
+----
+
+* Open another terminal and **cd** to linux build dir.
+
+[source,bash]
+----
+cd ~/yocto/yocto-playground/build/tmp/work/playground_x86-poky-linux/linux-playground/6.12.56/build
+----
+
+* Start **gdb**
+
+[NOTE]
+--
+Some distributions restrict GDB from auto-loading scripts unless they reside in
+approved safe directories. If GDB refuses to load vmlinux-gdb.py, add the
+following:
+--
+
+[source,bash]
+----
+echo "add-auto-load-safe-path /home/yocto/yocto-playground/build/tmp/work-shared/playground-x86/kernel-source/scripts/gdb/vmlinux-gdb.py" >> ~/.gdbinit
+----
+
+[source,gdb]
+----
+gdb ./vmlinux
+----
+
+[source,logs]
+----
+GNU gdb (Ubuntu 12.1-0ubuntu1~22.04.2) 12.1
+Copyright (C) 2022 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.
+Type "show copying" and "show warranty" for details.
+This GDB was configured as "x86_64-linux-gnu".
+Type "show configuration" for configuration details.
+For bug reporting instructions, please see:
+<https://www.gnu.org/software/gdb/bugs/>.
+Find the GDB manual and other documentation resources online at:
+    <http://www.gnu.org/software/gdb/documentation/>.
+
+For help, type "help".
+Type "apropos word" to search for commands related to "word"...
+Reading symbols from ./vmlinux...
+----
+
+* Load module (and main kernel) symbols:
+
+[source,gdb]
+----
+(gdb) lx-symbols
+loading vmlinux
+----
+
+* Set the breakpoint
+
+[source,gdb]
+----
+(gdb) b cmos_set_time
+Breakpoint 1 at 0xffffffff81dd0dd0: file /usr/src/kernel/drivers/rtc/rtc-cmos.c, line 244.
+----
+
+* Connect to **QEMU**
+
+[source,gdb]
+----
+(gdb) target remote :1234
+Remote debugging using :1234
+0x000000000000fff0 in exception_stacks ()
+----
+
+* Dump the log buffer of the target kernel:
+
+[source,gdb]
+----
+(gdb) lx-dmesg 
+[    0.000000] Linux version 6.12.56 (oe-user@oe-host) (x86_64-poky-linux-gcc (GCC) 14.3.0, GNU ld (GNU Binutils) 2.44.0.20250715) #1 SMP PREEMPT_DYNAMIC Wed Oct 29 13:09:02 UTC 2025
+[    0.000000] Command line: root=/dev/vda rw  mem=256M ip=dhcp console=ttyS0 console=ttyS1 oprofile.timer=1 tsc=reliable no_timer_check rcupdate.rcu_expedited=1 swiotlb=0 nokaslr
+[    0.000000] KERNEL supported cpus:
+[    0.000000]   Intel GenuineIntel
+[    0.000000]   AMD AuthenticAMD
+[    0.000000]   Hygon HygonGenuine
+[    0.000000]   Centaur CentaurHauls
+[    0.000000]   zhaoxin   Shanghai  
+[    0.000000] BIOS-provided physical RAM map:
+[    0.000000] BIOS-e820: [mem 0x0000000000000000-0x000000000009fbff] usable
+[    0.000000] BIOS-e820: [mem 0x000000000009fc00-0x000000000009ffff] reserved
+[    0.000000] BIOS-e820: [mem 0x00000000000f0000-0x00000000000fffff] reserved
+....
+----
+
+* List of commands and functions:
+
+[source,gdb]
+----
+(gdb) apropos lx
+function lx_clk_core_lookup -- Find struct clk_core by name
+function lx_current -- Return current task.
+function lx_dentry_name -- Return string of the full path of a dentry.
+function lx_device_find_by_bus_name -- Find struct device by bus and name (both strings)
+function lx_device_find_by_class_name -- Find struct device by class and name (both strings)
+function lx_i_dentry -- Return dentry pointer for inode.
+function lx_module -- Find module by name and return the module variable.
+function lx_per_cpu -- Return per-cpu variable.
+function lx_radix_tree_lookup --  Lookup and return a node from a RadixTree.
+function lx_rb_first -- Lookup and return a node from an RBTree
+function lx_rb_last -- Lookup and return a node from an RBTree.
+function lx_rb_next -- Lookup and return a node from an RBTree.
+function lx_rb_prev -- Lookup and return a node from an RBTree.
+function lx_task_by_pid -- Find Linux task by PID and return the task_struct variable.
+function lx_thread_info -- Calculate Linux thread_info from task variable.
+function lx_thread_info_by_pid -- Calculate Linux thread_info from task variable found by pid
+lx-clk-summary -- Print clk tree summary
+lx-cmdline --  Report the Linux Commandline used in the current kernel.
+lx-configdump -- Output kernel config to the filename specified as the command
+lx-cpus -- List CPU status arrays
+lx-device-list-bus -- Print devices on a bus (or all buses if not specified)
+lx-device-list-class -- Print devices in a class (or all classes if not specified)
+lx-device-list-tree -- Print a device and its children recursively
+lx-dmesg -- Print Linux kernel log buffer.
+lx-dump-page-owner -- Dump page owner
+lx-fdtdump -- Output Flattened Device Tree header and dump FDT blob to the filename
+lx-genpd-summary -- Print genpd summary
+lx-getmod-by-textaddr -- Look up loaded kernel module by text address.
+lx-interruptlist -- Print /proc/interrupts
+lx-iomem -- Identify the IO memory resource locations defined by the kernel
+lx-ioports -- Identify the IO port resource locations defined by the kernel
+lx-list-check -- Verify a list consistency
+lx-lsmod -- List currently loaded modules.
+lx-mounts -- Report the VFS mounts of the current process namespace.
+lx-page_address -- struct page to linear mapping address
+lx-page_to_pfn -- struct page to PFN
+lx-page_to_phys -- struct page to physical address
+lx-pfn_to_kaddr -- PFN to kernel address
+lx-pfn_to_page -- PFN to struct page
+lx-ps -- Dump Linux tasks.
+lx-slabinfo -- Show slabinfo
+lx-slabtrace -- Show specific cache slabtrace
+lx-stack_depot_lookup -- Search backtrace by handle
+lx-sym_to_pfn -- symbol address to PFN
+lx-symbols -- (Re-)load symbols of Linux kernel and currently loaded modules.
+lx-timerlist -- Print /proc/timer_list
+lx-version --  Report the Linux Version of the current kernel.
+lx-virt_to_page -- virtual address to struct page
+lx-virt_to_phys -- virtual address to physical address
+lx-vmallocinfo -- Show vmallocinfo
+(gdb)
+----
+
+== Debug remote target setup
+
+* Enable kernel configuration and build the image for target platform.
+
+* Run Agent Proxy
+[source,bash]
+----
+./agent-proxy/agent-proxy '127.0.0.1:5550^127.0.0.1:5551' 0 /dev/ttyUSB0,115200
+----
+
+* To connect to the console of the device:
+
+[source,bash]
+----
+telnet localhost 5550
+----
+
+* You have the console access.
+
+* There are two ways to enable the kgdb.
+
+=== Enable kgdb at run time
+
+[source,bash]
+----
+echo ttymxc0 > /sys/module/kgdboc/parameters/kgdboc
+----
+
+=== Enable kgdb at boot time
+Add to bootargs:
+
+[source,bootargs]
+----
+kgdboc=ttymxc0,115200 kgdbwait
+----
+With `kgdbwait`, kernel stops at boot:
+
+[source,logs]
+----
+KGDB: Waiting for connection from remote gdb...
+[2]kdb>
+----
+
+At runtime, trigger with sysrq:
+
+[source,bash]
+----
+echo g > /proc/sysrq-trigger
+----
+
+== Connect the gdb
+
+* Build the yocto SDK and Setup the enviroment as per the steps provided in the
+README.md of link:https://github.com/Abhishekojha38/yocto-playground.git[yocto-playground]
+
+* Once environment is setup. we can access gdb.
+
+[source,bash]
+----
+aarch64-linux-gnu-gdb ./vmlinux
+----
+
+Connect to target:
+
+[source,bash]
+----
+(gdb) target remote localhost:5551
+----
+
+Without agent-proxy:
+
+[source,bash]
+----
+(gdb) set remotebaud 115200
+(gdb) target remote /dev/ttyS0
+----
+
+== Example (i.MX8MQ: NXP Processor)
+
+[source,gdb]
+----
+(gdb) target remote localhost:4441
+(gdb) b dcss-dtg.c:134
+(gdb) c
+(gdb) p dtg
+(gdb) p *dtg
+(gdb) x/1x 0xffff800082363000
+(gdb) info frame
+(gdb) ptype *dtg
+----
+
+Example clock summary:
+
+[source,gdb]
+----
+(gdb) lx-clk-summary
+----
+
+Other useful commands:
+
+---
+lx-clk-summary Prints the kernel clock tree summary
+lx-symbols Loads kernel and module symbols
+lx-dmesg Dumps kernel log buffer
+lx-list Lists kernel linked list elements
+lx-device-list Lists registered devices
+---
+
+== References
+* https://www.marcusfolkesson.se/blog/debug-kernel-with-kgdb/
+* https://sergioprado.blog/debugging-the-linux-kernel-with-gdb/
+* https://www.kernel.org/doc/html/v4.14/dev-tools/kgdb.html
+* https://www.kernel.org/doc/html/v5.7/dev-tools/gdb-kernel-debugging.html
