@@ -6,7 +6,7 @@ is used along with gdb to debug a Linux kernel. The expectation is that gdb can
 be used to “break in” to the kernel to inspect memory, variables and look
 through call stack information similar to the way an application developer would
 use gdb to debug an application. It is possible to place breakpoints in kernel
-code and perform some limited execution stepping.
+code.
 
 == Kernel Configuration
 * `CONFIG_KGDB` to enable remote debugging.
@@ -33,22 +33,18 @@ Kernel Address Space Layout Randomization (KASLR) randomizes the kernel’s memo
 layout at boot time.
 
 === Through Kernel Configuration
+
+[source,config]
 ----
 CONFIG_RANDOMIZE_BASE=y
 ----
 
 === By Modifying Boot Arguments
+
+[source,bootargs]
 ----
 setenv bootargs "${bootargs} nokaslr"
 saveenv
-----
-
-== Using lx-symbols in GDB
-If KASLR is disabled, load symbols:
-
-----
-(gdb) add-symbol-file vmlinux
-(gdb) lx-symbols
 ----
 
 == DUT/QEMU Setup
@@ -308,15 +304,14 @@ telnet localhost 5550
 
 * There are two ways to enable the kgdb.
 
-=== Enable kgdb at run time
+** Enable kgdb at run time
 
 [source,bash]
 ----
 echo ttymxc0 > /sys/module/kgdboc/parameters/kgdboc
 ----
 
-=== Enable kgdb at boot time
-Add to bootargs:
+** Enable kgdb at boot time. Add to bootargs:
 
 [source,bootargs]
 ----
@@ -330,7 +325,7 @@ KGDB: Waiting for connection from remote gdb...
 [2]kdb>
 ----
 
-At runtime, trigger with sysrq:
+* At runtime, trigger with sysrq:
 
 [source,bash]
 ----
@@ -349,16 +344,16 @@ README.md of link:https://github.com/Abhishekojha38/yocto-playground.git[yocto-p
 aarch64-linux-gnu-gdb ./vmlinux
 ----
 
-Connect to target:
+* Connect to target:
 
-[source,bash]
+[source,gdb]
 ----
 (gdb) target remote localhost:5551
 ----
 
-Without agent-proxy:
+* Without agent-proxy:
 
-[source,bash]
+[source,gdb]
 ----
 (gdb) set remotebaud 115200
 (gdb) target remote /dev/ttyS0
@@ -378,22 +373,23 @@ Without agent-proxy:
 (gdb) ptype *dtg
 ----
 
-Example clock summary:
+* Example clock summary:
 
 [source,gdb]
 ----
 (gdb) lx-clk-summary
 ----
 
-Other useful commands:
+* Other useful commands:
 
----
+[source,gdb]
+----
 lx-clk-summary Prints the kernel clock tree summary
 lx-symbols Loads kernel and module symbols
 lx-dmesg Dumps kernel log buffer
 lx-list Lists kernel linked list elements
 lx-device-list Lists registered devices
----
+----
 
 == References
 * https://www.marcusfolkesson.se/blog/debug-kernel-with-kgdb/
