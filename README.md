@@ -9,13 +9,15 @@ reference materials.
 
 ## 📁 Topics
 
-- **[KGDB](./kgdb/kgdb.md)** — Kernel debugging setup and usage details,
+- **[KGDB](./kgdb/Debug-kernel-using-kgdb.adoc)** — Kernel debugging setup and usage details,
 including configuration, commands, and workflow examples.
 
 - **[Ext4-journal](./ext4-journal/ext4_journal_recovery_bug.adoc)** — Deep dive into EXT4 journal corruption analysis,
   checksum mismatches, and debugging using `GDB`.  
   Includes reproduction steps, kernel insights, and references to upstream patches
   (e.g., commit fix for kernel `6.1.22`).
+
+- **[dram-insights](./dram-insights/dram_insights.adoc)** — Deep dive into DRAM insights,
 
 ## 🚧 Work in Progress
 
@@ -28,6 +30,3 @@ This is primarily a personal technical journal, but discussions and suggestions
 are welcome via issues or pull requests.
 
 ---
-
-> _"The best way to learn deeply is to document thoroughly."_  
-> — *Tech Journal Motto*
