@@ -8,6 +8,17 @@ through call stack information similar to the way an application developer would
 use gdb to debug an application. It is possible to place breakpoints in kernel
 code.
 
+== How it Works
+* `Host & Target`: A "host" machine runs the GDB client, while the "target" machine runs the Linux kernel you want to debug.
+* `Connection`: A serial cable (like RS-232) or network (UDP/IP) connects the two machines, enabling GDB to talk to the kernel.
+* `Kernel Integration`: KGDB is built into the kernel, acting as a GDB server that listens for commands from the host.
+* `Debugging Actions`: You can pause the kernel, examine registers, set breakpoints in kernel functions (like do_execve),
+and step instruction-by-instruction or line-by-line.
+
+
+== Block Diagram
+image::images/blockdiagram.png[]
+
 == Kernel Configuration
 * `CONFIG_KGDB` to enable remote debugging.
 * `CONFIG_KGDB_SERIAL_CONSOLE` to allow gdb to access the serial console.
@@ -16,17 +27,6 @@ code.
 * `CONFIG_FRAME_POINTER` uses the frame pointer to save the stack information and backtrace.
 * `CONDIF_DEBUG_INFO` enable debug symbols
 * `CONFIG_GDB_SCRIPTS` enable gdb scripts
-
-
-== Required Tools
-* `Agent-proxy` is used to split the serial port into two: one for console and another for gdb.
-
-[source,bash]
-----
-git clone http://git.kernel.org/pub/scm/utils/kernel/kgdb/agent-proxy.git
-cd agent-proxy
-make
-----
 
 == Disable KASLR
 Kernel Address Space Layout Randomization (KASLR) randomizes the kernel’s memory
@@ -47,7 +47,7 @@ setenv bootargs "${bootargs} nokaslr"
 saveenv
 ----
 
-== DUT/QEMU Setup
+== Using QEMU for KGDB Setup
 
 We will be using the link:https://github.com/Abhishekojha38/yocto-playground.git[yocto-playground]
 repository to create a **QEMU** setup and understand how **KGDB** works.
@@ -285,6 +285,18 @@ lx-vmallocinfo -- Show vmallocinfo
 
 == Debug remote target setup
 
+To debug the remote target we need to use the console for kgdb connection as well as for the console output. To achieve this we use `agent-proxy`.
+
+=== Required Tools
+* `Agent-proxy` is used to split the serial port into two: one for console and another for gdb.
+
+[source,bash]
+----
+git clone http://git.kernel.org/pub/scm/utils/kernel/kgdb/agent-proxy.git
+cd agent-proxy
+make
+----
+
 * Enable kernel configuration and build the image for target platform.
 
 * Run Agent Proxy
@@ -308,15 +320,15 @@ telnet localhost 5550
 
 [source,bash]
 ----
+# Enable kgdb at run time
 echo ttymxc0 > /sys/module/kgdboc/parameters/kgdboc
-----
 
-** Enable kgdb at boot time. Add to bootargs:
+#or
 
-[source,bootargs]
-----
+#Enable kgdb at boot time. Add to bootargs
 kgdboc=ttymxc0,115200 kgdbwait
 ----
+
 With `kgdbwait`, kernel stops at boot:
 
 [source,logs]
