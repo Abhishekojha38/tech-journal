@@ -20,6 +20,9 @@ and step instruction-by-instruction or line-by-line.
 image::images/blockdiagram.png[]
 
 == Kernel Configuration
+
+**Enable the following kernel configuration**
+
 * `CONFIG_KGDB` to enable remote debugging.
 * `CONFIG_KGDB_SERIAL_CONSOLE` to allow gdb to access the serial console.
 * `CONFIG_KALLSYMS_ALL` add all symbols into the kernel image.
@@ -28,16 +31,17 @@ image::images/blockdiagram.png[]
 * `CONDIF_DEBUG_INFO` enable debug symbols
 * `CONFIG_GDB_SCRIPTS` enable gdb scripts
 
-== Disable KASLR
+**Disbale the following kernel configuration**
+
+* `CONFIG_DEBUG_INFO_REDUCED` to disable reducing debug information.
+* `CONFIG_RANDOMIZE_BASE` to disable Kernel Address Space Layout Randomization (KASLR).
+
+[NOTE]
+--
 Kernel Address Space Layout Randomization (KASLR) randomizes the kernel’s memory
 layout at boot time.
+--
 
-=== Through Kernel Configuration
-
-[source,config]
-----
-CONFIG_RANDOMIZE_BASE=y
-----
 
 === By Modifying Boot Arguments
 
@@ -47,7 +51,7 @@ setenv bootargs "${bootargs} nokaslr"
 saveenv
 ----
 
-== Using QEMU for KGDB Setup
+== Using QEMU to understand KGDB
 
 We will be using the link:https://github.com/Abhishekojha38/yocto-playground.git[yocto-playground]
 repository to create a **QEMU** setup and understand how **KGDB** works.
@@ -63,17 +67,16 @@ repository.
 bitbake -c menuconfig virtual/kernel
 ----
 
-* After making the changes build the entire image and check the **vmlinux**
+* After making the changes build the entire image and check the **vmlinux**. Ensure the compiled vmlinux binary contains the debugging symbols by running the command given below:
 
-[source,bash]
+[source,logs]
 ----
-cd ${TOPDIR}/build/tmp/work/playground_x86-poky-linux/linux-playground/6.12.56/build
 file vmlinux
 ----
 
 [source,logs]
 ----
-vmlinux: ELF 64-bit LSB executable, x86-64, version 1 (SYSV), statically linked, BuildID[sha1]=146c10a69cb4f5349a44948f2e1254f79e7e815c, with debug_info, not stripped
+vmlinux: ELF 64-bit LSB pie executable, ARM aarch64, version 1 (SYSV), statically linked, BuildID[sha1=258357cfb94ce97bb7a4563611a48b6131250919, with debug_info, not stripped
 ----
 
 * Launch QEMU with the options below to enable GDB debugging:
@@ -132,6 +135,14 @@ runqemu - INFO - Port forward: hostfwd=tcp:127.0.0.1:2222-:22 hostfwd=tcp:127.0.
 runqemu - INFO - Running /home/yocto/yocto-playground/build/tmp/work/x86_64-linux/qemu-helper-native/1.0/recipe-sysroot-native/usr/bin/qemu-system-x86_64 -device virtio-net-pci,netdev=net0,mac=52:54:00:12:35:02 -netdev user,id=net0,hostfwd=tcp:127.0.0.1:2222-:22,hostfwd=tcp:127.0.0.1:2323-:23,tftp=/home/yocto/yocto-playground/build/tmp/deploy/images/playground-x86 -object rng-random,filename=/dev/urandom,id=rng0 -device virtio-rng-pci,rng=rng0 -drive file=/home/yocto/yocto-playground/build/tmp/deploy/images/playground-x86/playground-image-playground-x86.rootfs-20251114010330.ext4,if=virtio,format=raw -usb -device usb-tablet -usb -device usb-kbd   -cpu IvyBridge -machine q35,i8042=off -smp 4 -m 256  -s -S -serial mon:stdio -serial null -nographic  -kernel /home/yocto/yocto-playground/build/tmp/deploy/images/playground-x86/bzImage -append 'root=/dev/vda rw  mem=256M ip=dhcp console=ttyS0 console=ttyS1 oprofile.timer=1 tsc=reliable no_timer_check rcupdate.rcu_expedited=1 swiotlb=0 nokaslr'
 
 runqemu - INFO - Host uptime: 1154880.06
+----
+
+Check if KGDB is available on the target by running the command given below:
+
+[source,logs]
+----
+dmesg | grep kgdb
+ls /sys/module/kgdboc/
 ----
 
 * Open another terminal and **cd** to linux build dir.
@@ -282,6 +293,87 @@ lx-virt_to_phys -- virtual address to physical address
 lx-vmallocinfo -- Show vmallocinfo
 (gdb)
 ----
+
+== Debug an already loaded kernel module
+
+While the kernel body resides at well known virtual addresses (same as the load addresses from the vmlinux elf file), a loadable module (.ko) is just an archive, a collection of sections with no valid load address. The kernel loader allocates memory and decides where to load each loadable section of such a module. This means that, before module load (modprobe, insmod), we don't know where in the virtual memory it will stay, but we can find out immediately after the module load. The file kernel/module.c is the loader. Looking into this file, observe that some features are guarded by CONFIG_KALLSYMS definition. In order to export section load information to userspace, the kernel must be compiled with this macro enabled.
+
+* Start QEMU machine with following parameters:
+
+[source,bootargs]
+----
+runqemu playground-arm64 nographic qemuparams="-s -netdev tap,id=net1,ifname=tap1,script=no,downscript=no -device minimal-pcie-nic,netdev=net1" bootparams="nokaslr kgdboc=ttyAMA0,115200"
+----
+
+* Check module is loaded
+
+[source,logs]
+----
+root@playground-arm64:~# lsmod
+Module                  Size  Used by
+minimal_pcie_nic_drv    12288  0
+ipv6                  458752  20
+root@playground-arm64:~# 
+----
+
+* Get module sections
+
+[source,logs]
+----
+root@playground-arm64:~# for I in /sys/module/minimal_pcie_nic_drv/sections/.*; do     echo -n "$I: ";     cat "$I"; done
+/sys/module/minimal_pcie_nic_drv/sections/.altinstructions: 0xffff80007a5a7000
+/sys/module/minimal_pcie_nic_drv/sections/.data: 0xffff80007a5a5000
+/sys/module/minimal_pcie_nic_drv/sections/.exit.data: 0xffff80007a5a5118
+/sys/module/minimal_pcie_nic_drv/sections/.exit.text: 0xffff80007a5a322c
+/sys/module/minimal_pcie_nic_drv/sections/.gnu.linkonce.this_module: 0xffff80007a5a5140
+/sys/module/minimal_pcie_nic_drv/sections/.init.data: 0xffff80007a5ab000
+/sys/module/minimal_pcie_nic_drv/sections/.init.plt: 0xffff80007a5a9040
+/sys/module/minimal_pcie_nic_drv/sections/.init.text: 0xffff80007a5a9000
+/sys/module/minimal_pcie_nic_drv/sections/.init.text.ftrace_trampoline: 0xffff80007a5a9058
+/sys/module/minimal_pcie_nic_drv/sections/.note.Linux: 0xffff80007a5a74cc
+/sys/module/minimal_pcie_nic_drv/sections/.note.gnu.build-id: 0xffff80007a5a74a8
+/sys/module/minimal_pcie_nic_drv/sections/.note.gnu.property: 0xffff80007a5a7488
+/sys/module/minimal_pcie_nic_drv/sections/.plt: 0xffff80007a5a3640
+/sys/module/minimal_pcie_nic_drv/sections/.rodata: 0xffff80007a5a71a8
+/sys/module/minimal_pcie_nic_drv/sections/.rodata.str1.8: 0xffff80007a5a7018
+/sys/module/minimal_pcie_nic_drv/sections/.strtab: 0xffff80007a5ab6f8
+/sys/module/minimal_pcie_nic_drv/sections/.symtab: 0xffff80007a5ab008
+/sys/module/minimal_pcie_nic_drv/sections/.text: 0xffff80007a5a3000
+/sys/module/minimal_pcie_nic_drv/sections/.text.ftrace_trampoline: 0xffff80007a5a37cc
+/sys/module/minimal_pcie_nic_drv/sections/.text.unlikely: 0xffff80007a5a3250
+root@playground-arm64:~#
+----
+
+* Set kgdboc
+
+[source,logs]
+----
+root@playground-arm64:~# echo "ttyAMA0,115200" > /sys/module/kgdboc/parameters/kgdboc
+[   96.144182] KGDB: Unregistered I/O driver kgdboc, debugger disabled
+[   96.144452] KGDB: Registered I/O driver kgdboc
+root@playground-arm64:~# 
+----
+
+* Add symbol file
+
+[source,gdb]
+----
+(gdb) add-symbol-file ../../../minimal-pcie-nic/1.0/image/usr/lib/modules/6.12.56/extra/minimal_pcie_nic_drv.ko 0xffff80007a5a9000\
+    -s .init.data 0xffff80007a5ab000 \
+    -s .rodata.str1.8 0xffff80007a5a7018
+----
+
+* Set breakpoint
+
+[source,gdb]
+----
+(gdb) break minimal_pcie_nic_drv_tx
+Breakpoint 1 at 0xffff80007a5a9058
+(gdb) 
+----
+
+Now, we can continue debugging the module.
+
 
 == Debug remote target setup
 
