@@ -1,0 +1,25 @@
+<mxfile host="65bd71144e">
+    <diagram id="0OxaUR4zi6i2i72sRhNV" name="Page-1">
+        <mxGraphModel dx="700" dy="566" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="6" value="Toolchain Components&lt;br&gt;&lt;br&gt;&lt;br&gt;&lt;br&gt;&lt;br&gt;&lt;br&gt;&lt;br&gt;&lt;br&gt;&lt;br&gt;&lt;br&gt;&lt;br&gt;&lt;br&gt;" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+                    <mxGeometry x="200" y="130" width="300" height="200" as="geometry"/>
+                </mxCell>
+                <mxCell id="2" value="Binutils" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+                    <mxGeometry x="220" y="170" width="120" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="3" value="GCC&lt;br&gt;GNU Compiler Collection" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+                    <mxGeometry x="220" y="250" width="120" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="4" value="Linux header" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+                    <mxGeometry x="365" y="170" width="120" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="5" value="C Library (&lt;code class=&quot;bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.4rem] px-1 py-px text-[0.9rem]&quot;&gt;glibc&lt;/code&gt;, &lt;code class=&quot;bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.4rem] px-1 py-px text-[0.9rem]&quot;&gt;musl&lt;/code&gt;, &lt;code class=&quot;bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.4rem] px-1 py-px text-[0.9rem]&quot;&gt;uClibc-ng&lt;/code&gt;)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+                    <mxGeometry x="365" y="250" width="120" height="60" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>
