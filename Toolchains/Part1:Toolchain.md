@@ -57,16 +57,6 @@ Key tools inside binutils:
 | **ar** | Create/manage static libraries (.a files) |
 | **objcopy** | Convert between binary formats (ELF → raw binary, etc.) |
 
-**Practical example — cross binutils:**
-When you install a toolchain like `arm-linux-gnueabihf`, you get prefixed versions:
-
-```bash
-arm-linux-gnueabihf-as       # cross assembler
-arm-linux-gnueabihf-ld       # cross linker
-arm-linux-gnueabihf-objdump  # inspect ARM binaries
-arm-linux-gnueabihf-readelf  # read ARM ELF headers
-```
-
 **Practical use:**
 
 ```bash
@@ -83,12 +73,11 @@ arm-linux-gnueabihf-nm my_file.o
 arm-linux-gnueabihf-strip my_binary
 ```
 
-Note: we will discuss each tool in detail in the upcoming sections.
-
 ## 2.2. GCC (GNU Compiler Collection)
 **What it is:** The compiler that turns C/C++ source into machine code. In a cross toolchain, it targets a different architecture than the machine it runs on.
 
-GCC's internal pipeline:
+GCC is a compiler driver which orchestrates the build process, It contains the following components:
+
 ```bash
 Source (.c)
     ↓  [preprocessor: cpp]     → expands #include, #define
@@ -96,6 +85,13 @@ Source (.c)
     ↓  [assembler: as]         → produces object file (.o)  ← uses binutils
     ↓  [linker: ld]            → produces final binary       ← uses binutils
 ```
+
+1. gcc look for cpp, cc1, as, ld in the arm-linux-gnueabihf/bin/<as,ld,etc> and use them to build the final binary.
+2. gcc finds linux headers in the arm-linux-gnueabihf/include/linux/.
+3. gcc looks for glibc in the arm-linux-gnueabihf/lib/<.a,.so>
+4. gcc finds actual compilor cc1 in arm-linux-gnueabihf/libexec/
+5. gcc uses collect2 to collect the initalization functions,wrapping the linker. It calls ld.
+
 
 | Compiler | Description |
 |----------|-------------|
@@ -287,6 +283,41 @@ The C library is critical in Embedded Linux — it provides the standard C API a
 > **Recommendation**: Use **musl** for new OpenWrt or resource-constrained projects. Use **glibc** when you need broad software compatibility.
 
 ---
+## Overall Build Process
+
+1. Build binutils
+2. Build dependencies of gcc: mpc, mpfr, gmp, libelf, libstdc++
+3. Install Kernel headers
+4. Build first stage gcc : no support for C library, only support for static linking. Used to cross compile the libc.
+5. Build and Install libc(Use first stage GCC to build the C library for the target architecture)
+6. Build second stage gcc : with support for C library
+
+## sysroot
+
+1. The sysroot is a logical root directory for headers and libraries.
+2. Where gcc look for headers and ld looks for libraries.
+  2.1 let say "#include <stdio.h>" then gcc will look for stdio.h in the sysroot/usr/include directory.
+  2.2 let say user pass -lfoo command at time of linking then ld will look for foo.so or -lfoo.a in the sysroot/usr/lib directory.
+3. Both gcc and binutils are built with --with-sysroot=<path_to_sysroot>
+4. kernel headers and C library are installed in the sysroot
+5. If toolchain has been moved to a different location, gcc will still find its sysroot if it is in subdir of prefix
+6. Can be overwritten at runtime using --sysroot=<path_to_sysroot> flag
+7. The current sysroot can be printed using `gcc --print-sysroot` command
+
+## Architecture Tuning
+
+1.gcc provide several config time options to tune for specific architecture.
+1.1 --with-arch, --with-tune, --with-cpu, --with-fpu, --with-abi, --with-float-abi
+1.2 They can be overridden at runtime using -march, -mtune, -mcpu, -mfpu, -mabi, -mfloat-abi flags. However, part of toolchainis built with the config time options, so they cannot be changed.
+2. Passing -march=armv5te is not sufficient to make your binary work on armv5te architecture.
+
+## ABI
+1. ABI = Application Binary Interface
+2. Define calling convention, stack layout, register usage, etc.
+3. Size of basic data types, structure padding, etc.
+4. How systemcalls are made, how they are returned, etc.
+5. EABI and EABIHf
+
 
 ## 7. Getting a Toolchain
 
