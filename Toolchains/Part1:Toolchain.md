@@ -2,48 +2,18 @@
 
 A practical reference for understanding, building, and using toolchains in Embedded Linux development. We will start with theoretical concepts and move to practical implementation. We will be using ARM64 as our target architecture.
 
----
-
-## Table of Contents
-
-1. [What is a Toolchain?](#1-what-is-a-toolchain)
-2. [Key Components](#2-key-components)
-3. [Cross-Compilation Concepts](#3-cross-compilation-concepts)
-4. [Toolchain Naming Convention (Tuple)](#4-toolchain-naming-convention-tuple)
-5. [Types of Toolchains](#5-types-of-toolchains)
-6. [C Library Options](#6-c-library-options)
-7. [Getting a Toolchain](#7-getting-a-toolchain)
-8. [Using a Toolchain](#8-using-a-toolchain)
-9. [Sysroot](#9-sysroot)
-10. [Build Systems That Manage Toolchains](#10-build-systems-that-manage-toolchains)
-11. [Common Pitfalls](#11-common-pitfalls)
-12. [Quick Reference](#12-quick-reference)
-
----
-
 ## 1. What is a Toolchain?
 
-A **toolchain** is a set of programming tools used in sequence to produce a software artifact (typically a binary executable). In the context of Embedded Linux, a toolchain transforms C/C++ source code into machine code that runs on a target embedded processor.
+A **toolchain** is a set of programming tools used in sequence to produce a software artifact (typically a binary executable). 
 
-> A toolchain also typically includes a **debugger** (GDB), binary utilities (binutils), and a **C standard library** (glibc / musl / uClibc-ng).
+* Binutils (objdump, readelf, nm, strip, ar, objcopy, as, ld)
+* GCC (GNU Compiler Collection)
+* C library(glibc/musl/uClibc-ng)
+* kernel headers
 
----
+## 1.1. Binutils
+A collection of low-level tools that operate on binary/object files.
 
-## 2. Key Components
-These are the key components of a toolchain:
-
-![Toolchain Components](assets/ToolchainComponents.png)
-
-| Component | Tool | Role |
-|---|---|---|
-| Binary utils | `objdump`, `readelf`, `nm`, `strip`, `ar`, `objcopy`, `as`, `ld` | Inspect and manipulate binaries |
-| Compiler | `gcc(GNU Compiler Collection)` / `clang(LLVM Compiler Infrastructure)` | Translates C/C++ → assembly |
-|kernel headers |`linux/`| Linux kernel headers |
-| Debugger | `gdb` / `gdbserver` | Debug running processes |
-| C Library | `glibc` / `musl` / `uClibc-ng` | Standard C runtime & syscall wrappers |
-
-## 2.1. Binutils
-**What it is:** A collection of low-level tools that operate on binary/object files. It's the foundation everything else builds on.
 Key tools inside binutils:
 
 | Tool | Role |
@@ -73,8 +43,8 @@ arm-linux-gnueabihf-nm my_file.o
 arm-linux-gnueabihf-strip my_binary
 ```
 
-## 2.2. GCC (GNU Compiler Collection)
-**What it is:** The compiler that turns C/C++ source into machine code. In a cross toolchain, it targets a different architecture than the machine it runs on.
+## 1.2. GCC (GNU Compiler Collection)
+The compiler that turns C/C++ source into machine code. In a cross toolchain, it targets a different architecture than the machine it runs on.
 
 GCC is a compiler driver which orchestrates the build process, It contains the following components:
 
@@ -85,13 +55,6 @@ Source (.c)
     ↓  [assembler: as]         → produces object file (.o)  ← uses binutils
     ↓  [linker: ld]            → produces final binary       ← uses binutils
 ```
-
-1. gcc look for cpp, cc1, as, ld in the arm-linux-gnueabihf/bin/<as,ld,etc> and use them to build the final binary.
-2. gcc finds linux headers in the arm-linux-gnueabihf/include/linux/.
-3. gcc looks for glibc in the arm-linux-gnueabihf/lib/<.a,.so>
-4. gcc finds actual compilor cc1 in arm-linux-gnueabihf/libexec/
-5. gcc uses collect2 to collect the initalization functions,wrapping the linker. It calls ld.
-
 
 | Compiler | Description |
 |----------|-------------|
@@ -129,21 +92,32 @@ arm-linux-gnueabihf-gcc -c -o hello.o hello.c
 arm-linux-gnueabihf-gcc -march=armv7-a -mfpu=neon -mfloat-abi=hard -o hello hello.c
 ```
 
-**The float-abi detail (very practical for ARM):**
+## 1.3. C Library Options
 
-soft — all float ops done in software, passed in integer registers
-softfp — uses FPU instructions, but passes args in integer registers
-hard — uses FPU instructions AND passes args in FPU registers (fastest, but incompatible with soft libraries)
+The C library is critical in Embedded Linux — it provides the standard C API and wraps Linux system calls.
 
-If your toolchain is gnueabihf → h = hard float. You can't link hard objects with soft libraries — this is one of the most common ABI mismatch errors.
+| Library | Size | Features | Common Use Case |
+|---|---|---|---|
+| **glibc** | Large (~2 MB) | Full POSIX, best compatibility | Desktop-class embedded (i.MX8, RPi) |
+| **musl** | Small (~600 KB) | Lightweight, strict POSIX, static-friendly | OpenWrt, Alpine Linux, resource-constrained |
+| **uClibc-ng** | Very small | Subset of glibc API, configurable | Legacy small devices, Buildroot |
+| **newlib** | Minimal | Bare-metal / RTOS use | MCU firmware, no Linux kernel |
+| **dietlibc** | Minimal | Optimized for size | Extremely size-constrained targets |
 
-## 2.3. Linux Kernel Headers
+> **Recommendation**: Use **musl** for new OpenWrt or resource-constrained projects. Use **glibc** when you need broad software compatibility.
 
-What they are: C header files exported from the Linux kernel that define the syscall interface — things like ioctl numbers, struct stat, POSIX types, signal numbers, etc.
+## 1.4. Linux Kernel Headers
 
-Why they matter: The C library (and your code) needs to know how to talk to the kernel. These headers define that contract.
+* **What they are**: C header files exported from the Linux kernel that define the syscall interface — things like:
 
-Key location in a sysroot:
+  * `ioctl` numbers
+  * `struct stat`
+  * `POSIX` types
+  * `signal numbers`, etc.
+
+* **Why they matter**: The C library (and your code) needs to know how to talk to the kernel. These headers define that contract.
+
+* **Key location in a sysroot**:
 
 ```
 sysroot/
@@ -158,65 +132,53 @@ sysroot/
       asm-generic/
 ```
 
-How they're generated:
+* **How they're generated**:
 
 ```bash
 From kernel source, export headers for a target arch
 make ARCH=arm INSTALL_HDR_PATH=/path/to/sysroot/usr headers_install
 ```
 
-Note: Important rule — kernel headers version:
+**Note**: Important rule — kernel headers version:
 
-They should match the minimum kernel version you'll run on
-Newer headers ≠ always better — using headers newer than your target kernel can introduce unavailable syscalls
-The C library wraps these — you rarely include <linux/...> directly in app code, but glibc/musl does internally
+* They should match the minimum kernel version you'll run on
 
-Practical inspection:
+* Newer headers ≠ always better — using headers newer than your target kernel can introduce unavailable syscalls
 
-```bash
-# See what syscall numbers look like for ARM
-cat /path/to/sysroot/usr/include/asm/unistd.h
+* The C library wraps these — you rarely include `<linux/...>` directly in app code, but `glibc/musl` does internally.
 
-# Check the version of exported headers
-cat /path/to/sysroot/usr/include/linux/version.h
-```
----
 
-![alt text](assets/image.png)
-
-## 3. Cross-Compilation Concepts
+## 2. Cross-Compilation Concepts
 
 In native compilation, **build**, **host**, and **target** machines are the same. In embedded development, they differ:
 
-| Term | Definition | Example |
-|---|---|---|
-| **Build** | Machine running the compiler | x86-64 Linux (your laptop) |
-| **Host** | Machine the compiler runs on | Same as build in most cases |
-| **Target** | Machine the resulting binary runs on | ARM Cortex-A53 (embedded board) |
+* **Build machine** - Machine building the cross-compiler. For example, your laptop or a dedicated build server.
+* **Host machine** - Machine running the cross-compiler to generate code for the target machine. Usually the same as the build machine.
+* **Target machine** - where the compiled code runs. For example, your embedded board.
 
-**Cross-compilation** is compiling on the *build* machine to produce binaries for the *target* machine.
-
-```
-┌───────────────────────┐             Binary          ┌──────────────────────┐
-│  Build Machine        │ ─────────────────────────▶  │  Target Device       │
-│  (x86-64 / macOS /    │                             │  (ARM / MIPS /       │
-│   Linux)              │                             │   RISC-V / ...)      │
-└───────────────────────┘                             └──────────────────────┘
-         ▲
- Cross-compiler runs here
-```
 
 **Native compilation vs Cross-compilation:**
 
-| Case | Build Machine | Host Machine | Target Machine | Toolchain Prefix |
-|------|---------------|--------------|----------------|------------------|--------------------|
-| **Native** | x86-64 Linux | x86-64 Linux | x86-64 Linux | `x86_64-linux-gnu-` | host=target=build
-| **Cross** | x86-64 Linux | x86-64 Linux | ARM Cortex-A53 | `aarch64-linux-gnu-` | host=build≠target
+* **Native compilation**: The compiler runs on the same architecture as the target. The build, host, and target are all the same.
+  * **Build Machine** - x86_64 Linux (your laptop)
+  * **Host Machine** - x86_64 Linux (your laptop)
+  * **Target Machine** - x86_64 Linux (your laptop)
 
+```
+host = build = target
+```
 
----
+* **Cross-compilation**: The compiler runs on a different architecture than the target. The build and host are the same, but the target is different.
 
-## 4. Toolchain Naming Convention (Tuple)
+  * **Build Machine** - x86_64 Linux (your laptop)
+  * **Host Machine** - x86_64 Linux (your laptop)
+  * **Target Machine** - ARM Cortex-A53 (embedded board) 
+
+```
+  host = build ≠ target
+```
+
+## 3. Toolchain Naming Convention (Tuple)
 
 Toolchain binaries follow a structured naming scheme:
 
@@ -244,82 +206,99 @@ Toolchain binaries follow a structured naming scheme:
 
 ---
 
-## 5. Types of Toolchains
+## 4. Types of Toolchains
 
-### 5.1 Native Toolchain
+### 4.1 Native Toolchain
 Compiles code for the same machine it runs on.
 - Used for: Host tools, build system utilities
 - Example: `gcc` on an x86-64 Ubuntu machine producing x86-64 binaries
 
-### 5.2 Cross-Compilation Toolchain
+### 4.2 Cross-Compilation Toolchain
 Runs on the build machine, produces binaries for a different target architecture.
 - Used for: Compiling Linux kernels, rootfs, applications for embedded boards
 - Example: `arm-linux-gnueabihf-gcc` running on x86-64 producing ARM binaries
 
-### 5.3 Cross-Native (Canadian Cross)
+### 4.3 Cross-Native (Canadian Cross)
 The toolchain itself is built for a different host than the build machine.
 - Used for: Shipping a toolchain *to* the target device so it can self-compile
 - Example: Building an ARM-hosted `arm-linux-gnueabihf-gcc` on an x86-64 build machine
 
-### 5.4 Bare-Metal Toolchain
+### 4.4 Bare-Metal Toolchain
 Targets systems without an OS. No Linux kernel, no C library (or a minimal one like `newlib`).
 - Used for: MCU firmware, bootloaders (U-Boot early stages)
 - Example: `arm-none-eabi-gcc`
 
 ---
 
-## 6. C Library Options
-
-The C library is critical in Embedded Linux — it provides the standard C API and wraps Linux system calls.
-
-| Library | Size | Features | Common Use Case |
-|---|---|---|---|
-| **glibc** | Large (~2 MB) | Full POSIX, best compatibility | Desktop-class embedded (i.MX8, RPi) |
-| **musl** | Small (~600 KB) | Lightweight, strict POSIX, static-friendly | OpenWrt, Alpine Linux, resource-constrained |
-| **uClibc-ng** | Very small | Subset of glibc API, configurable | Legacy small devices, Buildroot |
-| **newlib** | Minimal | Bare-metal / RTOS use | MCU firmware, no Linux kernel |
-| **dietlibc** | Minimal | Optimized for size | Extremely size-constrained targets |
-
-> **Recommendation**: Use **musl** for new OpenWrt or resource-constrained projects. Use **glibc** when you need broad software compatibility.
-
----
-## Overall Build Process
-
-1. Build binutils
-2. Build dependencies of gcc: mpc, mpfr, gmp, libelf, libstdc++
-3. Install Kernel headers
-4. Build first stage gcc : no support for C library, only support for static linking. Used to cross compile the libc.
-5. Build and Install libc(Use first stage GCC to build the C library for the target architecture)
-6. Build second stage gcc : with support for C library
-
-## sysroot
+## 5. Sysroot
 
 1. The sysroot is a logical root directory for headers and libraries.
 2. Where gcc look for headers and ld looks for libraries.
-  2.1 let say "#include <stdio.h>" then gcc will look for stdio.h in the sysroot/usr/include directory.
-  2.2 let say user pass -lfoo command at time of linking then ld will look for foo.so or -lfoo.a in the sysroot/usr/lib directory.
+
+   2.1 let say "#include <stdio.h>" then gcc will look for stdio.h in the sysroot/usr/include directory.
+
+   2.2 let say user pass -lfoo command at time of linking then ld will look for foo.so or -lfoo.a in the sysroot/usr/lib directory.
 3. Both gcc and binutils are built with --with-sysroot=<path_to_sysroot>
 4. kernel headers and C library are installed in the sysroot
 5. If toolchain has been moved to a different location, gcc will still find its sysroot if it is in subdir of prefix
 6. Can be overwritten at runtime using --sysroot=<path_to_sysroot> flag
 7. The current sysroot can be printed using `gcc --print-sysroot` command
 
-## Architecture Tuning
+The **sysroot** is a directory that mirrors the target's root filesystem layout, containing:
+
+- Headers (`include/`)
+- Libraries (`lib/`, `usr/lib/`)
+- C library (`.so` / `.a` files)
+
+It allows the cross-compiler to find the correct target libraries during linking, without polluting the host system.
+
+```
+sysroot/
+├── usr/
+│   ├── include/          ← Target system headers
+│   └── lib/              ← Target libraries
+└── lib/                  ← C library, ld-linux, etc.
+```
+
+### Using the sysroot
+
+```bash
+aarch64-linux-gnu-gcc --sysroot=/path/to/sysroot -o app app.c
+```
+
+Build systems (Buildroot, Yocto) manage the sysroot automatically and pass it to the compiler via their internal wrapper scripts.
+
+## 6. Architecture Tuning
+
+Architecture tuning usually refers to compiling your code so it’s optimized for a specific CPU architecture and micro-architecture, instead of using generic defaults.
 
 1.gcc provide several config time options to tune for specific architecture.
+
 1.1 --with-arch, --with-tune, --with-cpu, --with-fpu, --with-abi, --with-float-abi
-1.2 They can be overridden at runtime using -march, -mtune, -mcpu, -mfpu, -mabi, -mfloat-abi flags. However, part of toolchainis built with the config time options, so they cannot be changed.
+
+1.2 They can be overridden at runtime using -march, -mtune, -mcpu, -mfpu, -mabi, -mfloat-abi flags. However, part of toolchain is built with the config time options, so they cannot be changed.
+
 2. Passing -march=armv5te is not sufficient to make your binary work on armv5te architecture.
 
-## ABI
+## 7. ABI
+
+ABI = Application Binary Interface. It defines the low-level contracts required for compiled programs to run together on a given CPU architecture and operating system.
+
 1. ABI = Application Binary Interface
 2. Define calling convention, stack layout, register usage, etc.
 3. Size of basic data types, structure padding, etc.
 4. How systemcalls are made, how they are returned, etc.
 5. EABI and EABIHf
+**The float-abi detail (very practical for ARM):**
+
+* **soft** — all float ops done in software, passed in integer registers
+* **softfp** — uses FPU instructions, but passes args in integer registers
+* **hard** — uses FPU instructions AND passes args in FPU registers (fastest, but incompatible with soft libraries)
+
+**Note:** If your toolchain is gnueabihf → h = hard float. You can't link hard objects with soft libraries — this is one of the most common ABI mismatch errors.
 
 
-## 7. Getting a Toolchain
+## 8. Getting a Toolchain
 
 ### Option A: Distro Package (Fastest)
 
@@ -375,7 +354,7 @@ Build systems like **Buildroot** or **Yocto/OpenEmbedded** generate and manage t
 
 ---
 
-## 8. Using a Toolchain
+## 9. Using a Toolchain
 
 Once installed, set the `CROSS_COMPILE` environment variable (convention used by Linux kernel, U-Boot, and most embedded projects):
 
@@ -430,78 +409,7 @@ make -j$(nproc)
 
 ---
 
-## 9. Sysroot
-
-The **sysroot** is a directory that mirrors the target's root filesystem layout, containing:
-
-- Headers (`include/`)
-- Libraries (`lib/`, `usr/lib/`)
-- C library (`.so` / `.a` files)
-
-It allows the cross-compiler to find the correct target libraries during linking, without polluting the host system.
-
-```
-sysroot/
-├── usr/
-│   ├── include/          ← Target system headers
-│   └── lib/              ← Target libraries
-└── lib/                  ← C library, ld-linux, etc.
-```
-
-### Using the sysroot
-
-```bash
-aarch64-linux-gnu-gcc --sysroot=/path/to/sysroot -o app app.c
-```
-
-Build systems (Buildroot, Yocto) manage the sysroot automatically and pass it to the compiler via their internal wrapper scripts.
-
----
-
-## 10. Build Systems That Manage Toolchains
-
-For real embedded Linux projects, using a full build system is strongly recommended:
-
-### Buildroot
-
-- Simple, fast, Makefile-based
-- Builds: toolchain, kernel, bootloader, rootfs
-- Toolchain: internal (Crosstool-NG based) or external
-- Best for: small-to-medium projects, routers, custom appliances
-
-```bash
-make menuconfig      # Configure target, toolchain, packages
-make -j$(nproc)      # Build everything
-```
-
-### Yocto / OpenEmbedded
-
-- Highly flexible, layer-based recipe system
-- Produces: SDKs, images, toolchains (as artifacts)
-- Best for: complex products, commercial-grade BSPs
-- Steeper learning curve
-
-```bash
-source oe-init-build-env
-bitbake core-image-minimal        # Build a minimal image
-bitbake meta-toolchain             # Build a standalone SDK/toolchain
-```
-
-### OpenWrt Build System
-
-- Purpose-built for network devices
-- Manages its own cross-compilation toolchain (musl-based)
-- Provides an opkg package feed infrastructure
-
-```bash
-make menuconfig      # Select target platform and packages
-make toolchain/install  # Build only the toolchain
-make -j$(nproc)      # Full build
-```
-
----
-
-## 11. Common Pitfalls
+## 10. Common Pitfalls
 
 ### ❌ Mismatched ABI (hard-float vs soft-float)
 
@@ -534,7 +442,7 @@ You compiled with `gcc` instead of `aarch64-linux-gnu-gcc`. The `CROSS_COMPILE` 
 
 ---
 
-## 12. Quick Reference
+## 11. Quick Reference
 
 ### Environment Variables
 
