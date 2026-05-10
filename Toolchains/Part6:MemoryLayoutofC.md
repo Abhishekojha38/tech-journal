@@ -1,8 +1,9 @@
 # C Memory Layout
 
-The memory layout of a program shows how its data is stored in memory during execution. It helps developers understand and manage memory efficiently.
+The memory layout of a program shows how its data is stored in memory during execution.
+It helps developers understand and manage memory efficiently.
 
-* Memory is divided into sections such as code, data, heap, and stack.
+* Memory is divided into sections such as text, data, heap, and stack.
 * Knowing the memory layout is useful for optimizing performance, debugging and prevent errors like segmentation fault and memory leak.
 
 ## 1. `Text` segment (code)
@@ -11,8 +12,16 @@ The memory layout of a program shows how its data is stored in memory during exe
 * It is typically stored in the lower part of memory.
 * The size of the text segment depends on the number of instructions and the program’s complexity.
 
+Example:
+
+```c
+#include <stdio.h>
+void greet(const char *name) { ... }  /* → text segment */
+int  main()                  { ... }  /* → text segment */
+```
+
 ## 2. Data segment
-* The data segment stores initialized data and static variables.
+* The data segment stores **global variables** and **static variables** that are initialized by the programmer.
 * It is divided into two parts:
     * Read-only data segment
     * Writable data segment
@@ -20,7 +29,23 @@ The memory layout of a program shows how its data is stored in memory during exe
 * Uninitialized global variables → `.bss` segment
 * Static local variables → `.data` segment (if initialized) or `.bss` (if uninitialized)
 
-### Read only data segment (`.rodata`)
+### Initialized data segment (`.data`)
+* Initialized global variables → `.data` segment
+* Static local variables → `.data` segment (if initialized)
+* Static global variables → `.data` segment
+
+Example:
+```c
+int global_init = 42; // .data segment
+static int s_count = 0; // .data segment
+
+int main() {
+    static int s_count = 10; // .data segment
+....
+}
+```
+
+#### Read only data segment (`.rodata`)
 * String literals → `.rodata` segment
 * Constant variables → `.rodata` segment
 
@@ -31,7 +56,7 @@ const int MAX = 256; // MAX in .rodata
 const char VER[] = "1.0.0"; // VER in .rodata
 ```
 
-### Writable data segment (`.data`)
+#### Writable data segment (`.data`)
 * Initialized global variables → `.data` segment
 * Static local variables → `.data` segment (if initialized)
 * Static global variables → `.data` segment
@@ -44,7 +69,7 @@ const char *msg = "hello"; // "hello" in .rodata, msg in .data
 const char * const msg2 = "hello2"; // msg2 in .rodata, "hello2" in .rodata
 ```
 
-## 3. `BSS` segment (Uninitialized data segment )
+### Uninitialized data segment (`.bss`)
 * Uninitialized global variables → `.bss` segment
 * Static local variables → `.bss` segment (if uninitialized)
 * Static global variables → `.bss` segment
@@ -78,6 +103,8 @@ Example:
 int x = 7; // STACK: local int
 ```
 
+# Explain with one example
+
 ## 6. The Example C Program
 
 Save this as `mem.c` — all verification steps in this guide use it.
@@ -88,7 +115,7 @@ Save this as `mem.c` — all verification steps in this guide use it.
 #include <string.h>
 
 /* Initialized global → DATA segment */
-int global_init   = 42;
+int global_init   = 42; 
 
 /* Uninitialized global → BSS segment (zeroed by OS) */
 int global_uninit;
