@@ -268,19 +268,7 @@ aarch64-linux-gnu-gcc --sysroot=/path/to/sysroot -o app app.c
 
 Build systems (Buildroot, Yocto) manage the sysroot automatically and pass it to the compiler via their internal wrapper scripts.
 
-## 6. Architecture Tuning
-
-Architecture tuning usually refers to compiling your code so it’s optimized for a specific CPU architecture and micro-architecture, instead of using generic defaults.
-
-1.gcc provide several config time options to tune for specific architecture.
-
-1.1 --with-arch, --with-tune, --with-cpu, --with-fpu, --with-abi, --with-float-abi
-
-1.2 They can be overridden at runtime using -march, -mtune, -mcpu, -mfpu, -mabi, -mfloat-abi flags. However, part of toolchain is built with the config time options, so they cannot be changed.
-
-2. Passing -march=armv5te is not sufficient to make your binary work on armv5te architecture.
-
-## 7. ABI
+## 6. ABI
 
 ABI = Application Binary Interface. It defines the low-level contracts required for compiled programs to run together on a given CPU architecture and operating system.
 
@@ -298,7 +286,7 @@ ABI = Application Binary Interface. It defines the low-level contracts required 
 **Note:** If your toolchain is gnueabihf → h = hard float. You can't link hard objects with soft libraries — this is one of the most common ABI mismatch errors.
 
 
-## 8. Getting a Toolchain
+## 7. Getting a Toolchain
 
 ### Option A: Distro Package (Fastest)
 
@@ -354,7 +342,7 @@ Build systems like **Buildroot** or **Yocto/OpenEmbedded** generate and manage t
 
 ---
 
-## 9. Using a Toolchain
+## 8. Using a Toolchain
 
 Once installed, set the `CROSS_COMPILE` environment variable (convention used by Linux kernel, U-Boot, and most embedded projects):
 
@@ -409,7 +397,7 @@ make -j$(nproc)
 
 ---
 
-## 10. Common Pitfalls
+## 9. Common Pitfalls
 
 ### ❌ Mismatched ABI (hard-float vs soft-float)
 
@@ -442,7 +430,7 @@ You compiled with `gcc` instead of `aarch64-linux-gnu-gcc`. The `CROSS_COMPILE` 
 
 ---
 
-## 11. Quick Reference
+## 10. Quick Reference
 
 ### Environment Variables
 

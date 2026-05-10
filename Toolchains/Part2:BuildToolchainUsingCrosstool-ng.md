@@ -4,20 +4,6 @@
 
 ---
 
-## Table of Contents
-
-1. [Prerequisites](#1-prerequisites)
-2. [Install Crosstool-NG](#2-install-crosstool-ng)
-3. [List and Select a Sample Configuration](#3-list-and-select-a-sample-configuration)
-4. [Customize the Configuration](#4-customize-the-configuration)
-5. [Build the Toolchain](#5-build-the-toolchain)
-6. [Verify the Toolchain](#6-verify-the-toolchain)
-7. [Use the Toolchain](#7-use-the-toolchain)
-8. [Understanding the Output Directory](#8-understanding-the-output-directory)
-9. [Troubleshooting](#9-troubleshooting)
-
----
-
 ## Full plan is 
 
 Step 1 — Install dependencies on Ubuntu
