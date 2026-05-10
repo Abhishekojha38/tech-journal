@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 550 200" font-family="Inter, system-ui, sans-serif">
+  <rect width="550" height="200" rx="12" fill="#0f172a"/>
+  <text x="275" y="25" text-anchor="middle" fill="#e2e8f0" font-size="14" font-weight="700">Tool Loadout (Semantic Selection)</text>
+  <!-- All tools grid -->
+  <text x="120" y="48" text-anchor="middle" fill="#94a3b8" font-size="11" font-weight="600">All Available Tools</text>
+  <rect x="20" y="58" width="65" height="32" rx="4" fill="#1e293b" stroke="#475569" stroke-width="1"/>
+  <text x="52" y="79" text-anchor="middle" fill="#64748b" font-size="10">Tool 1</text>
+  <rect x="95" y="58" width="65" height="32" rx="4" fill="#1e293b" stroke="#22d3ee" stroke-width="1.5"/>
+  <text x="127" y="79" text-anchor="middle" fill="#67e8f9" font-size="10">Tool 2</text>
+  <rect x="170" y="58" width="65" height="32" rx="4" fill="#1e293b" stroke="#475569" stroke-width="1"/>
+  <text x="202" y="79" text-anchor="middle" fill="#64748b" font-size="10">Tool 3</text>
+  <rect x="20" y="100" width="65" height="32" rx="4" fill="#1e293b" stroke="#475569" stroke-width="1"/>
+  <text x="52" y="121" text-anchor="middle" fill="#64748b" font-size="10">Tool 4</text>
+  <rect x="95" y="100" width="65" height="32" rx="4" fill="#1e293b" stroke="#22d3ee" stroke-width="1.5"/>
+  <text x="127" y="121" text-anchor="middle" fill="#67e8f9" font-size="10">Tool 5</text>
+  <rect x="170" y="100" width="65" height="32" rx="4" fill="#1e293b" stroke="#475569" stroke-width="1"/>
+  <text x="202" y="121" text-anchor="middle" fill="#64748b" font-size="10">Tool 6</text>
+  <rect x="20" y="142" width="65" height="32" rx="4" fill="#1e293b" stroke="#475569" stroke-width="1"/>
+  <text x="52" y="163" text-anchor="middle" fill="#64748b" font-size="10">Tool 7</text>
+  <rect x="95" y="142" width="65" height="32" rx="4" fill="#1e293b" stroke="#475569" stroke-width="1"/>
+  <text x="127" y="163" text-anchor="middle" fill="#64748b" font-size="10">Tool 8</text>
+  <rect x="170" y="142" width="65" height="32" rx="4" fill="#1e293b" stroke="#475569" stroke-width="1"/>
+  <text x="202" y="163" text-anchor="middle" fill="#64748b" font-size="10">Tool 9</text>
+  <!-- Arrow -->
+  <line x1="260" y1="100" x2="330" y2="100" stroke="#22d3ee" stroke-width="2"/>
+  <polygon points="328,95 328,105 335,100" fill="#22d3ee"/>
+  <text x="295" y="90" text-anchor="middle" fill="#22d3ee" font-size="9">semantic</text>
+  <text x="295" y="118" text-anchor="middle" fill="#22d3ee" font-size="9">search</text>
+  <!-- Selected tools -->
+  <text x="430" y="48" text-anchor="middle" fill="#94a3b8" font-size="11" font-weight="600">Selected Loadout</text>
+  <rect x="345" y="60" width="170" height="100" rx="8" fill="#1e293b" stroke="#22d3ee" stroke-width="1.5"/>
+  <rect x="360" y="75" width="140" height="28" rx="4" fill="#164e63" stroke="#22d3ee" stroke-width="1"/>
+  <text x="430" y="94" text-anchor="middle" fill="#67e8f9" font-size="11">Tool 2 ✓</text>
+  <rect x="360" y="115" width="140" height="28" rx="4" fill="#164e63" stroke="#22d3ee" stroke-width="1"/>
+  <text x="430" y="134" text-anchor="middle" fill="#67e8f9" font-size="11">Tool 5 ✓</text>
+  <text x="275" y="192" text-anchor="middle" fill="#64748b" font-size="10" font-style="italic">Only relevant tools are loaded into context</text>
+</svg>

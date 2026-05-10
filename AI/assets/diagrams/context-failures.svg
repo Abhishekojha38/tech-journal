@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 200" font-family="Inter, system-ui, sans-serif">
+  <rect width="520" height="200" rx="12" fill="#0f172a"/>
+  <text x="260" y="25" text-anchor="middle" fill="#e2e8f0" font-size="14" font-weight="700">Context Failure Modes</text>
+  <!-- 2x2 grid -->
+  <!-- Poisoning -->
+  <rect x="20" y="45" width="230" height="60" rx="8" fill="#1e293b" stroke="#ef4444" stroke-width="1.5"/>
+  <text x="35" y="68" fill="#fca5a5" font-size="12" font-weight="600">☠ Context Poisoning</text>
+  <text x="35" y="88" fill="#94a3b8" font-size="10">Hallucination propagates in context</text>
+  <!-- Distraction -->
+  <rect x="270" y="45" width="230" height="60" rx="8" fill="#1e293b" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="285" y="68" fill="#fcd34d" font-size="12" font-weight="600">😵 Context Distraction</text>
+  <text x="285" y="88" fill="#94a3b8" font-size="10">Over-focuses on context, ignores training</text>
+  <!-- Confusion -->
+  <rect x="20" y="120" width="230" height="60" rx="8" fill="#1e293b" stroke="#a78bfa" stroke-width="1.5"/>
+  <text x="35" y="143" fill="#c4b5fd" font-size="12" font-weight="600">🤷 Context Confusion</text>
+  <text x="35" y="163" fill="#94a3b8" font-size="10">Noise buries the signal</text>
+  <!-- Clash -->
+  <rect x="270" y="120" width="230" height="60" rx="8" fill="#1e293b" stroke="#f472b6" stroke-width="1.5"/>
+  <text x="285" y="143" fill="#f9a8d4" font-size="12" font-weight="600">⚔ Context Clash</text>
+  <text x="285" y="163" fill="#94a3b8" font-size="10">New info contradicts existing prompt</text>
+</svg>

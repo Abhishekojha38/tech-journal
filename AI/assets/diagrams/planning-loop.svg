@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 280" font-family="Inter, system-ui, sans-serif">
+  <rect width="480" height="280" rx="12" fill="#0f172a"/>
+  <text x="240" y="25" text-anchor="middle" fill="#e2e8f0" font-size="14" font-weight="700">Planning Loop</text>
+  <!-- User Goal -->
+  <rect x="30" y="45" width="120" height="40" rx="8" fill="#1e293b" stroke="#f472b6" stroke-width="1.5"/>
+  <text x="90" y="70" text-anchor="middle" fill="#f9a8d4" font-size="12" font-weight="600">User Goal</text>
+  <!-- Arrow -->
+  <line x1="150" y1="65" x2="185" y2="65" stroke="#475569" stroke-width="1.5"/>
+  <polygon points="183,60 183,70 190,65" fill="#475569"/>
+  <!-- Plan -->
+  <rect x="190" y="45" width="120" height="40" rx="8" fill="#1e293b" stroke="#6366f1" stroke-width="1.5"/>
+  <text x="250" y="63" text-anchor="middle" fill="#c7d2fe" font-size="12" font-weight="600">Plan</text>
+  <text x="250" y="78" text-anchor="middle" fill="#94a3b8" font-size="10">todo.md</text>
+  <!-- Arrow -->
+  <line x1="310" y1="65" x2="345" y2="65" stroke="#475569" stroke-width="1.5"/>
+  <polygon points="343,60 343,70 350,65" fill="#475569"/>
+  <!-- Execute -->
+  <rect x="350" y="45" width="110" height="40" rx="8" fill="#1e293b" stroke="#22d3ee" stroke-width="1.5"/>
+  <text x="405" y="63" text-anchor="middle" fill="#67e8f9" font-size="12" font-weight="600">Execute</text>
+  <text x="405" y="78" text-anchor="middle" fill="#94a3b8" font-size="10">Step 1</text>
+  <!-- Down arrow -->
+  <line x1="405" y1="85" x2="405" y2="110" stroke="#475569" stroke-width="1.5"/>
+  <polygon points="400,108 410,108 405,115" fill="#475569"/>
+  <!-- Execute Step 2 -->
+  <rect x="350" y="115" width="110" height="40" rx="8" fill="#1e293b" stroke="#22d3ee" stroke-width="1.5"/>
+  <text x="405" y="133" text-anchor="middle" fill="#67e8f9" font-size="12" font-weight="600">Execute</text>
+  <text x="405" y="148" text-anchor="middle" fill="#94a3b8" font-size="10">Step 2</text>
+  <!-- Down arrow -->
+  <line x1="405" y1="155" x2="405" y2="180" stroke="#475569" stroke-width="1.5"/>
+  <polygon points="400,178 410,178 405,185" fill="#475569"/>
+  <!-- Review -->
+  <rect x="170" y="185" width="280" height="40" rx="8" fill="#1e293b" stroke="#a78bfa" stroke-width="2"/>
+  <text x="310" y="210" text-anchor="middle" fill="#c4b5fd" font-size="12" font-weight="600">Review / Revise Plan</text>
+  <!-- Loop arrow back -->
+  <path d="M170,205 L80,205 L80,65 L150,65" fill="none" stroke="#a78bfa" stroke-width="1.5" stroke-dasharray="5"/>
+  <polygon points="143,60 143,70 150,65" fill="#a78bfa"/>
+  <!-- Loop label -->
+  <text x="60" y="140" fill="#a78bfa" font-size="10" font-weight="600" transform="rotate(-90 60 140)">loop</text>
+  <!-- Caption -->
+  <text x="240" y="265" text-anchor="middle" fill="#64748b" font-size="10" font-style="italic">Plan → Execute → Review → Revise (repeat)</text>
+</svg>
