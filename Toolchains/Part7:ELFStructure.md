@@ -2,10 +2,10 @@
 
 **Executable and Linkable Format (ELF)** is the generic file format for executables on any Unix-flavored OS (and some non-Unix ones).
 
-* executable files: `ls`, `grep`, `gcc`, etc.
-* object code: `main.o`, `print.o`, etc.
-* shared libraries: `libc.so.6`, `libm.so.6`, etc.
-* core dumps: A snapshot of a program's memory at the time of a crash
+* **Executable files:** `ls`, `grep`, `gcc`, etc.
+* **Object code:** `main.o`, `print.o`, etc.
+* **Shared libraries:** `libc.so.6`, `libm.so.6`, etc.
+* **Core dumps:** A snapshot of a program's memory at the time of a crash
 
 * **ELF HEADER :** It describes attributes of an ELF binary which include information useful to the loaders & linkers. It includes location to other body parts of an ELF binary which is helpful while implementing parsers for the binary.
 
@@ -188,14 +188,6 @@ That ALLOC means that `.dynsym` will be allocated at runtime and loaded in memor
 
 **stripped**
 NOTE: `.dynsym` contains what is necessary for execution, whereas `.symtab` exists only for debugging and linking purposes — and is often “stripped” (removed) from the binaries to save space.
-
-
-
-
-
-
-
-
 
 ## Program Headers
 
