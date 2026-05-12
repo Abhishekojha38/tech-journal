@@ -1,4 +1,17 @@
 # What is ELF?
+ELF, or Executable and Linkable Format, is a standard file format for executables, object code, shared libraries, and even core dumps on Unix-like operating systems. It serves as a bridge between the compiled source code and the operating system, facilitating the loading and execution of programs.
+
+### Why ELF?
+The ELF format is widely adopted due to its versatility and compatibility with various Unix-like operating systems, including Linux. It allows for the dynamic linking of libraries, making it possible to create modular and reusable code. ELF files also support position-independent code, enabling the use of address space layout randomization (ASLR) for enhanced security.
+
+### What Information is Stored in ELF?
+The ELF format stores essential information about an executable file, including:
+
+* **Header Information**: Contains details about the ELF file such as its type, architecture, entry point, and program header table offset.
+* **Section Headers**: Define various sections of the executable, including code, data, symbol tables, and more.
+* **Program Headers**: Specify segments of the file, indicating which parts should be loaded into memory.
+* **Symbol Tables**: Contain information about symbols in the code, aiding in debugging and linking.
+* **Dynamic Section**: Holds information needed for dynamic linking, including shared library dependencies.
 
 **Executable and Linkable Format (ELF)** is the generic file format for executables on any Unix-flavored OS (and some non-Unix ones).
 
