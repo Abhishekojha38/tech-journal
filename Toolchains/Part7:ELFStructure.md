@@ -1,7 +1,8 @@
 # ELF - Executable and Linkable Format
-Executable and Linkable Format (ELF), is the default binary format on Linux-based systems.
+Executable and Linkable Format (ELF), is the default binary format on
+Linux-based systems.
 
-Executables Shared Libraries Object Files Core dumpe Used for:
+Used for:
 * Executables
 * Shared Libraries
 * Object Files(relocatable files)
@@ -26,10 +27,13 @@ The ELF format stores essential information about an executable file, including:
 
 * **ELF Header**: Contains details about the ELF file such as its type, 
 architecture, entry point, and program header table offset.
+
 * **Section Header Table (SHT)**: Define various sections of the executable, 
 including code, data, symbol tables, and more.
+
 * **Program Header Table (PHT)**: Specify segments of the file, indicating which
 parts should be loaded into memory.
+
 * **Symbol Table**: Contain information about symbols in the code, aiding
 in debugging and linking.
 
@@ -50,7 +54,7 @@ Now, let's compile this program and see the ELF structure.
 
 ```bash
 # compile the C code
-gcc -o test test.c
+arm-linux-gnueabi-gcc -o test test.c
 file test
 ```
 
@@ -61,15 +65,15 @@ test: ELF 64-bit LSB pie executable, ARM aarch64, version 1 (SYSV), dynamically 
 ```
 
 ## Sections
-* `Sections` are for linking (Linking View). They organize code and data into
-logical chunks for the compiler and linker to process (e.g., .text for code,
+* `Sections` are for `linking (Linking View)`. They organize code and data into
+logical chunks for the compiler and linker to process (e.g., `.text` for code,
 `.data` for variables).
 * Used by compilers and linkers.
 * Defined in the `Section Header Table`.
 * `.text`, `.data`, `.bss`, `.rodata`.
 
 ## Segments
-* `Segments` are for execution (Execution View). They group sections together
+* `Segments` are for `execution (Execution View)`. They group sections together
 based on memory permissions (e.g., read, write, execute) so the operating
 system's loader can efficiently map them into RAM.
 * Used by the OS loader.
@@ -83,6 +87,8 @@ segment. For example:
 combined into a single loadable segment with "Read" and "Execute" permissions.
 * The `.data` (initialized) and `.bss` (uninitialized) sections are combined
 into a loadable segment with "Read" and "Write" permissions.
+
+![Sections and Segments](assets/ELFSectionsSegments.png)
 
 We can check this using program headers:
 
@@ -112,40 +118,13 @@ Program Headers:
    08     .init_array .fini_array .dynamic .got
 ```
 
-First LOAD segment contains following sections:
-* .interp
-* .note.gnu.build-id
-* .note.ABI-tag
-* .gnu.hash
-* .dynsym
-* .dynstr
-* .gnu.version
-* .gnu.version_r
-* .rel.dyn
-* .rel.plt
-* .init
-* .plt
-* .text
-* .fini
-* .rodata
-* .ARM.exidx
-* .eh_frame
-
-Second LOAD segment contains following sections:
-* .init_array
-* .fini_array
-* .dynamic
-* .got
-* .data
-* .bss
-
 # Let's first understand the main components of ELF
 
 ## ELF Header
 Every ELF file has an ELF header.
 It specify following info:
 
-* Magic Number: Identifies the file as an ELF file.
+* `Magic Number`: Identifies the file as an ELF file.
 
 * What `processor` it’s designed to run on. ELF files can contain machine code
   for different processor types, like ARM and x86.
@@ -339,6 +318,8 @@ These are the tables storing the static and dynamic symbols for the binary.
 
 **Wait a minute, what do you mean by a symbol ?**
 
+## Symbols
+
 `Symbols` as the name suggests, are symbolic references to some `data`
 or `code`, such as `global variable` or `function`. A developer uses `names`
 to refer `functions` and `variables` throughout a `program`, these informations
@@ -398,21 +379,18 @@ In this section we will be covering all the `sections` in an ELF file.
 
 ---
 
-## Symbol & String Tables
+## Symbol & String Tables & Relocation Sections (Compile-time)
 
 | Section | What it stores | Notes | Relevant to |
 |---|---|---|---|
 | `.symtab` | Every function/variable name with address, size, and binding (local/global/weak) | Required by the linker. Stripped from release executables | `OBJ` `STA` |
 | `.strtab` | Null-terminated symbol names for `.symtab`, packed end-to-end | Symbols reference byte offsets into this section. Stripped in release | `OBJ` `STA` |
-
----
-
-## Relocation Sections (Compile-time)
-
-| Section | What it stores | Notes | Relevant to |
-|---|---|---|---|
 | `.rel.text` / `.rela.text` | Patches the linker applies to `.text` — calls/jumps with unknown targets | `.rel` = no addend, `.rela` = with addend. Resolved and removed after linking | `OBJ` `STA` |
 | `.rel.data` / `.rela.data` | Patches to `.data` — global pointer initializers referencing other symbols | Same mechanics as `.rel.text`, applied to data addresses | `OBJ` `STA` |
+
+How linker uses `.symtab` and `.strtab`?
+
+![alt text](assets/Symbol-String-Table.png)
 
 ---
 
