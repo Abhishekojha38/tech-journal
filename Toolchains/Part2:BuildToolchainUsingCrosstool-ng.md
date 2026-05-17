@@ -1,25 +1,10 @@
 # Building an ARM64 Toolchain Using Crosstool-NG
 
-> **Goal:** Build a complete `aarch64-unknown-linux-gnu` cross-compilation toolchain from source on an x86-64 Linux host using [Crosstool-NG](https://crosstool-ng.github.io/).
+> **Goal:** Build a complete `aarch64-unknown-linux-gnu` cross-compilation
+toolchain from source on an x86-64 Linux host using
+[Crosstool-NG](https://crosstool-ng.github.io/).
 
 ---
-
-## Full plan is 
-
-Step 1 — Install dependencies on Ubuntu
-      ↓
-Step 2 — Build toolchain with Crosstool-NG
-         (binutils + gcc + kernel headers + glibc)
-      ↓
-Step 3 — Compile test programs with the toolchain
-         (C program, float test, struct layout test)
-      ↓
-Step 4 — Install QEMU
-      ↓
-Step 5 — Run and test binaries on QEMU
-         (dynamic binary, static binary, ABI tests)
-      ↓
-Step 6 — Deliberately break ABI and observe/debug
 
 ## 1. Prerequisites
 
@@ -54,7 +39,8 @@ make --version
 bison --version
 ```
 
-> **Why all these?** Crosstool-NG downloads and compiles binutils, GCC, glibc, GDB, etc. from source. Each component has its own set of build-time dependencies.
+> **Why all these?** Crosstool-NG downloads and compiles binutils, GCC,
+> GDB, etc. from source. Each component has its own set of build-time dependencies.
 
 ### 1.2 Verify Key Tools
 
@@ -98,13 +84,15 @@ There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A
 PARTICULAR PURPOSE.
 ```
 
-> `--enable-local` installs everything inside the current directory — no `sudo` needed and easy to remove.
+> `--enable-local` installs everything inside the current directory — no
+> `sudo` needed and easy to remove.
 
 ---
 
 ## 3. List and Select a Sample Configuration
 
-Crosstool-NG ships with pre-defined **sample configurations** for common targets. These are excellent starting points.
+Crosstool-NG ships with pre-defined **sample configurations** for common
+targets. These are excellent starting points.
 
 ### 3.1 List Available Samples
 
@@ -131,7 +119,8 @@ The prefix `[G...]` means the sample is known to build correctly (Green).
 ./ct-ng aarch64-unknown-linux-gnu
 ```
 
-This writes a `.config` file in the current directory. It is similar to Linux kernel's `defconfig`.
+This writes a `.config` file in the current directory. It is similar to Linux
+kernel's `defconfig`.
 
 ### 3.3 (Alternative) ARM64 + musl libc
 
