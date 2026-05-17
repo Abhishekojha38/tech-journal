@@ -1,29 +1,29 @@
-# Part 3: ABI — Application Binary Interface
+# ABI — Application Binary Interface
 
----
+> **ABI = the set of rules that allow separately compiled binary modules to work
+together.**
 
-## Table of Contents
+Two object files can only be linked and run together correctly if they agree on:
 
-1. [API vs ABI — What's the Difference?](#1-api-vs-abi--whats-the-difference)
-2. [What is an ABI?](#2-what-is-an-abi)
-3. [What an ABI Defines](#3-what-an-abi-defines)
-4. [Types of ABIs](#4-types-of-abis)
-5. [Calling Conventions in Depth](#5-calling-conventions-in-depth)
-6. [Data Layout and Struct Padding](#6-data-layout-and-struct-padding)
-7. [Name Mangling (C++)](#7-name-mangling-c)
-8. [ABI in Action — Assembly Walk-Through](#8-abi-in-action--assembly-walk-through)
-9. [ABI Breakage — What It Is and How It Happens](#9-abi-breakage--what-it-is-and-how-it-happens)
-10. [Real-World ABI Breakage Examples](#10-real-world-abi-breakage-examples)
-11. [Detecting and Preventing ABI Breakage](#11-detecting-and-preventing-abi-breakage)
-12. [Summary Cheat-Sheet](#12-summary-cheat-sheet)
+- How function arguments are passed (registers or stack).
+- What registers must be preserved across a call.
+- How structures are laid out in memory.
+- How symbols (function/variable names) are represented in object files.
+- How exceptions are propagated (C++).
+- What the system call interface looks like.
 
----
+the ABI is affected by
+
+1. the CPU’s instruction set architecture (ISA)
+2. the operating system (OS)
+3. the compiler
 
 ## 1. API vs ABI — What's the Difference?
 
 ### API — Application Programming Interface
 
-An **API** is a **source-level contract**. It tells a programmer *how* to call a function or use a library at the **C/C++ (or any language) source code level**.
+An **API** is a **source-level contract**. It tells a programmer *how* to call a
+function or use a library at the **C/C++ (or any language) source code level**.
 
 ```c
 /* API: the function signature a programmer sees */
@@ -37,11 +37,15 @@ int printf(const char *format, ...);
 
 ### ABI — Application Binary Interface
 
-An **ABI** is a **binary-level contract**. It tells the machine *how* compiled code actually communicates — which registers hold arguments, how the stack is laid out, how structs are packed in memory, how symbols are named in object files.
+An **ABI** is a **binary-level contract**. It tells the machine **how** compiled
+code actually communicates — which registers hold arguments, how the stack is
+laid out, how structs are packed in memory, how symbols are named in object
+files.
 
 - Defined by the **toolchain, OS, and processor architecture** together.
 - Consumed at **link time** and **run time**.
-- If you break an ABI, the calling code **compiles fine but crashes or gives wrong results at runtime**.
+- If you break an ABI, the calling code **compiles fine but crashes or gives
+wrong results at runtime**.
 
 ### Side-by-Side Comparison
 
@@ -54,40 +58,50 @@ An **ABI** is a **binary-level contract**. It tells the machine *how* compiled c
 | Who uses it | Programmers | Compilers, linkers, dynamic loaders |
 | Example | `printf(const char*, ...)` | R0 holds first arg, stack grows down, return in R0 |
 
-> **Key insight:** An API is a contract between **programmers**. An ABI is a contract between **binaries**.  
-> You can have a stable ABI even after changing source code — as long as the compiled binary interface does not change.
+> **Key insight:** An API is a contract between **programmers**. An ABI is a
+> contract between **binaries**.  
+> You can have a stable ABI even after changing source code — as long as the
+> compiled binary interface does not change.
 
----
+## 2. What an ABI Defines
 
-## 2. What is an ABI?
+* Calling convention
+* Register usage
+* Stack layout and frame structure
+* Data type sizes and alignment
+* Exception handling
+* Symbol naming (name mangling)
+* Linkage conventions (e.g., how .so files refer to each other)
+* System call interface
 
-> **ABI = the set of rules that allow separately compiled binary modules to work together.**
+### 2.1 Calling Convention
+Which registers carry arguments, return values, and the link register. Who
+saves/restores caller-saved vs callee-saved registers.
 
-Two object files can only be linked and run together correctly if they agree on:
+![Calling Convention](assets/ABICallingConvention.png)
 
-- How function arguments are passed (registers or stack).
-- What registers must be preserved across a call.
-- How structures are laid out in memory.
-- How symbols (function/variable names) are represented in object files.
-- How exceptions are propagated (C++).
-- What the system call interface looks like.
+### 2.2 Register Usage
+ABI defines how registers are used when compiling source code. Let say if assembler 
+generates object code for "int add(int a, int b)" and compiler uses R0 for first 
+argument and R1 for second argument and R2 for return value. Then the assembler 
+should generate object code for add function that uses R0 for first argument and 
+R1 for second argument and R2 for return value.
 
-Without a shared ABI, a library compiled by GCC and a program compiled by Clang could not interoperate, even on the same machine.
+Else linker will fail to link the object code for add function with the object
+code for main function. Resulting into runtime error.
 
----
+Every register gets a role: argument, return value, scratch, preserved, stack
+pointer, frame pointer, link register.
 
-## 3. What an ABI Defines
+### 2.3 Stack Layout and Frame Structure
+Direction of growth (almost always downward), alignment requirements, where
+local variables, saved registers, and the return address live.
 
-### 3.1 Calling Convention
-Which registers carry arguments, return values, and the link register. Who saves/restores caller-saved vs callee-saved registers.
+When function call happens, stack frame is created for the function. The way stack
+layed out also depends on ABI. How much stack space is allocated for local
+variables, saved registers and return address depends on ABI.
 
-### 3.2 Register Usage
-Every register gets a role: argument, return value, scratch, preserved, stack pointer, frame pointer, link register.
-
-### 3.3 Stack Layout and Frame Structure
-Direction of growth (almost always downward), alignment requirements, where local variables, saved registers, and the return address live.
-
-### 3.4 Data-Type Sizes and Alignment
+### 2.4 Data-Type Sizes and Alignment
 
 ```
 Type        LP64 (Linux/x86-64)    ILP32 (Linux/ARM 32-bit)
@@ -99,27 +113,45 @@ long long   8 / 8                   8 / 8
 pointer     8 / 8                   4 / 4   ← differs!
 ```
 
-### 3.5 Struct / Union Layout (padding and packing)
-The compiler inserts padding bytes to satisfy alignment rules. Two compilers with different padding strategies produce structs of different sizes → ABI break.
+### 2.5 Struct / Union Layout (padding and packing)
+The compiler inserts padding bytes to satisfy alignment rules. Two compilers
+with different padding strategies produce structs of different sizes → ABI break.
 
-### 3.6 Object File and Binary Format
-ELF (Linux), PE/COFF (Windows), Mach-O (macOS). Relocations, symbol table format, section names.
+### 2.6 Object File and Binary Format
+ELF (Linux), PE/COFF (Windows), Mach-O (macOS). Relocations, symbol table
+format, section names.
 
-### 3.7 Exception Handling and Unwinding
-DWARF-based `.eh_frame` tables (Itanium C++ ABI), SJLJ exceptions. Mixing incompatible schemes crashes the unwinder.
+### 2.7 Exception Handling and Unwinding
+DWARF-based `.eh_frame` tables (Itanium C++ ABI), SJLJ exceptions. Mixing
+incompatible schemes crashes the unwinder.
 
-### 3.8 Thread-Local Storage (TLS) Model
-How `__thread` / `thread_local` variables are accessed.
+## 3. Types of ABIs
 
-### 3.9 System Call Interface (Kernel ABI)
-System call numbers, argument registers, return convention between user space and kernel.
+* Machine / Processor ABI (psABI)
+* Library ABI (Shared Library ABI)
+* Kernel ABI (KABI)
 
----
+```
+┌─────────────────────────────────────┐
+│          Language ABI               │  Level 5
+├─────────────────────────────────────┤
+│          System ABI                 │  Level 4
+├─────────────────────────────────────┤
+│          Kernel ABI                 │  Level 3
+├─────────────────────────────────────┤
+│          psABI                      │  Level 2
+├─────────────────────────────────────┤
+│          Hardware                   │  Level 1
+└─────────────────────────────────────┘
+```
 
-## 4. Types of ABIs
+### 3.1 Machine / Processor ABI (psABI)
+Defined per CPU architecture. 
+It covers:
 
-### 4.1 Machine / Processor ABI (psABI)
-Defined per CPU architecture. Covers calling convention, register roles, stack alignment.
+- `Calling convention`
+- `Register roles`
+- `Stack alignment`
 
 | Architecture | ABI Specification |
 |---|---|
@@ -130,16 +162,92 @@ Defined per CPU architecture. Covers calling convention, register roles, stack a
 | MIPS | MIPS O32 / N32 / N64 |
 | PowerPC 64-bit | ELFv2 ABI |
 
-> **ARM EABI (Embedded ABI)** is particularly important in embedded Linux. It introduced stricter alignment, efficient VFP argument passing, and replaced the older OABI.
+#### What the psABI Defines?
 
-### 4.2 Library ABI (Shared Library ABI)
+1. Register Set and Roles
+
+```
+x86-64 psABI register map:
+
+rax   scratch / return value
+rbx   callee-saved
+rcx   scratch / arg 4 (user ABI)
+rdx   scratch / arg 3 / return (high half)
+rsi   scratch / arg 2
+rdi   scratch / arg 1
+rbp   callee-saved / frame pointer
+rsp   stack pointer (always)
+r8    scratch / arg 5
+r9    scratch / arg 6
+r10   scratch
+r11   scratch
+r12   callee-saved
+r13   callee-saved
+r14   callee-saved
+r15   callee-saved
+rip   instruction pointer (not general purpose)
+```
+
+2. Data Type Sizes and Alignment
+```
+Type       Size   Alignment    Purpose
+char       1      1 byte       single bytes
+short      2      2 bytes      2-byte values
+int        4      4 bytes      32-bit integers
+long       8      8 bytes      64-bit integers (LP64)
+pointer    8      8 bytes      8-byte addresses
+float      4      4 bytes      single-precision float
+double     8      8 bytes      double-precision float
+```
+
+
+3. Struct Layout and Padding
+
+```
+struct Example {
+    char  a;    // offset 0,  size 1
+    // 3 bytes padding ← psABI alignment rule
+    int   b;    // offset 4,  size 4
+    char  c;    // offset 8,  size 1
+    // 7 bytes padding
+    long  d;    // offset 16, size 8
+};              // total: 24 bytes
+```
+
+4. Calling Convention Foundation
+
+```
+psABI defines:                    OS ABI adds:
+──────────────                    ────────────
+which regs are scratch      →     which scratch regs carry args
+which regs are preserved    →     specific arg ordering
+stack direction/alignment   →     shadow space / red zone rules
+return value register       →     struct return conventions
+```
+
+### 3.2 Library ABI (Shared Library ABI)
 The contract exported by a `.so` (shared object). Includes:
 - The set of exported symbols (functions, global variables).
 - Their calling conventions.
 - The layout of any structs passed across the library boundary.
 - The library's SONAME (`libc.so.6`).
 
-A library has a **stable ABI** if a new version of the `.so` can drop in to replace the old one without recompiling the caller.
+```
+┌─────────────────────────────────────┐
+│          Language ABI               │
+├─────────────────────────────────────┤
+│       Library ABI         ◄── HERE  │
+├─────────────────────────────────────┤
+│          System ABI                 │
+├─────────────────────────────────────┤
+│          Kernel ABI                 │
+├─────────────────────────────────────┤
+│          psABI                      │
+└─────────────────────────────────────┘
+```
+
+A library has a **stable ABI** if a new version of the `.so` can drop in to
+replace the old one without recompiling the caller.
 
 **Library versioning example:**
 
@@ -148,32 +256,164 @@ libfoo.so        →  symlink to →  libfoo.so.2        →  libfoo.so.2.1.3
   (linker name)                    (SONAME / runtime)    (real file)
 ```
 
-Incrementing the SONAME (`libfoo.so.2` → `libfoo.so.3`) signals an ABI break.
+![Linux Shared Library Versioning](assets/LibraryABI.png)
 
-### 4.3 Kernel ABI (KABI)
+Incrementing the **SONAME** (`libfoo.so.2` → `libfoo.so.3`) signals an ABI break.
+
+**Build library with SONAME**
+
+```bash
+gcc -shared -fPIC foo.c \
+    -Wl,-soname,libfoo.so.1 \    # ← bake soname in
+    -o libfoo.so.1.0.0
+
+ln -s libfoo.so.1.0.0  libfoo.so.1
+ln -s libfoo.so.1      libfoo.so
+```
+ * Your App Links Against v1.0.0
+
+ ```bash
+ gcc app.c -lfoo -o app
+ $ readelf -d app | grep NEEDED
+
+NEEDED    libfoo.so.1     ← soname recorded, not the full version
+```
+
+Your app permanently says "I need libfoo.so.1" — not .1.0.0, not .2. Just the
+major version.
+
+* Patch Release — v1.0.1 (bug fix)
+
+```bash
+gcc -shared -fPIC foo.c \
+    -Wl,-soname,libfoo.so.1 \    # ← soname unchanged
+    -o libfoo.so.1.0.1
+
+# update symlinks
+ln -sf libfoo.so.1.0.1  libfoo.so.1   # ← soname symlink moves
+ln -sf libfoo.so.1       libfoo.so
+
+# On disk
+libfoo.so      → libfoo.so.1
+libfoo.so.1    → libfoo.so.1.0.1    ← updated
+libfoo.so.1.0.0   (old file, still there)
+libfoo.so.1.0.1   (new file)
+```
+
+Your app still says NEEDED libfoo.so.1. Dynamic linker follows the symlink →
+gets 1.0.1 automatically. No recompile needed. App just got the bug fix.
+
+* Major Release — v2.0.0 (ABI break)
+
+```bash
+gcc -shared -fPIC foo.c \
+    -Wl,-soname,libfoo.so.2 \
+    -o libfoo.so.2.0.0
+
+ln -s libfoo.so.2.0.0  libfoo.so.2
+ln -s libfoo.so.2      libfoo.so
+```
+
+Your app still runs fine against `libfoo.so.1`. It never sees v2.0.0.
+
+#### Symbol Versioning Inside the .so
+* version script
+```
+// version script: libfoo.map
+
+LIBFOO_1.0 {
+    global:
+        image_create;
+        image_draw;
+        image_destroy;
+    local: *;
+};
+
+LIBFOO_1.1 {
+    global:
+        image_create_rgb;    // new in 1.1
+} LIBFOO_1.0;                // inherits all 1.0 symbols
+```
+
+* Build with version script
+
+```bash
+gcc -shared -fPIC foo.c \
+    -Wl,--version-script=libfoo.map \
+    -Wl,-soname,libfoo.so.1 \
+    -o libfoo.so.1.1.0
+
+$ nm -D libfoo.so.1.1.0
+
+image_create@@LIBFOO_1.0      ← @@ means default version
+image_draw@@LIBFOO_1.0
+image_destroy@@LIBFOO_1.0
+image_create_rgb@@LIBFOO_1.1  ← only in 1.1+
+```
+
+Apps compiled against 1.0 bind to LIBFOO_1.0 symbols. Apps compiled against 1.1
+get LIBFOO_1.1. Same file serves both.
+
+#### What the Dynamic Linker Does at Runtime?
+```
+$ ./app
+
+1. kernel loads app into memory
+2. kernel sees NEEDED libfoo.so.1
+3. hands off to /lib/ld-linux.so (dynamic linker)
+4. ld.so searches:
+      LD_LIBRARY_PATH  (if set)
+      /etc/ld.so.cache (prebuilt index)
+      /usr/lib
+      /lib
+5. finds libfoo.so.1 → follows symlink → libfoo.so.1.1.0
+6. loads it into memory
+7. resolves symbols:
+      app's image_create → libfoo's image_create@@LIBFOO_1.0
+      app's image_draw   → libfoo's image_draw@@LIBFOO_1.0
+8. patches GOT (Global Offset Table) with real addresses
+9. app starts running
+```
+
+```
+your app                PLT stub            GOT              libfoo.so
+────────                ────────            ───              ─────────
+
+call image_draw    →    image_draw@plt  →   [address]   →   image_draw()
+                        (trampoline)        (filled by
+                                            ld.so at
+                                            load time)
+```
+
+### 3.3 Kernel ABI (KABI)
 
 Splits into two parts:
 
 #### a) System Call ABI (User ↔ Kernel)
 The interface between user-space programs and the kernel:
 - **System call numbers** (e.g., `read` = syscall 0 on x86-64, syscall 3 on ARM).
-- **Argument registers**: x86-64 uses `rdi, rsi, rdx, r10, r8, r9`; ARM uses `r0–r6`.
+- **Argument registers**: x86-64 uses `rdi, rsi, rdx, r10, r8, r9`; ARM uses
+  `r0–r6`.
 - **Return value**: `rax` / `r0`.
 - **`errno` encoding** in the return value.
 
-Linux guarantees this interface is **permanently stable**. A binary compiled for Linux 2.6 still runs on Linux 6.x because syscall numbers and conventions have not changed.
+Linux guarantees this interface is **permanently stable**. A binary compiled for
+Linux 2.6 still runs on Linux 6.x because syscall numbers and conventions have
+not changed.
 
 #### b) Kernel Module ABI (KABI)
 The internal interface between the kernel and its loadable modules (`.ko` files):
+
 - Exported kernel symbols (`EXPORT_SYMBOL`, `EXPORT_SYMBOL_GPL`).
 - Struct layouts used across the module boundary (`struct sk_buff`, `struct net_device`).
-- This is **not stable** upstream — a module built for kernel 6.1 will NOT load on kernel 6.2 without recompilation (enforced by `vermagic` and `Module.symvers`).
+- This is **not stable** upstream — a module built for kernel 6.1 will NOT load
+  on kernel 6.2 without recompilation (enforced by `vermagic` and `Module.symvers`).
 
-Enterprise distributions (RHEL, SUSE) maintain a **stable KABI** across a major release so that third-party drivers don't need to be recompiled on every kernel update.
+Enterprise distributions (RHEL, SUSE) maintain a **stable KABI** across a major
+release so that third-party drivers don't need to be recompiled on every kernel
+update.
 
----
-
-## 5. Calling Conventions in Depth
+## 4. Calling Conventions in Depth
 
 ### Example 1: ARM (AArch32)
 Let’s say you have:
@@ -260,9 +500,10 @@ What happened?
 
 It happens when Caller and callee don’t follow the same calling convention rules.
 So they disagree on:
-where arguments are
-where return value is
-which registers are preserved
+
+- where arguments are
+- where return value is
+- which registers are preserved
 
 Result → wrong data, crashes, or undefined behavior
 
@@ -293,7 +534,8 @@ What goes wrong?
 
 ## 6. Data Layout and Struct Padding
 
-The compiler aligns each field to its natural alignment. It inserts **padding bytes** to satisfy this requirement.
+The compiler aligns each field to its natural alignment. It inserts
+**padding bytes** to satisfy this requirement.
 
 ### Example
 
@@ -314,14 +556,18 @@ struct mixed {
 /* sizeof(struct mixed) = 12, NOT 6 */
 ```
 
-If one compilation unit sees a different layout (e.g., because it was compiled with `#pragma pack` or a different `__attribute__((packed))`), accessing the same struct will read/write the wrong bytes.
+If one compilation unit sees a different layout (e.g., because it was compiled
+with `#pragma pack` or a different `__attribute__((packed))`), accessing the
+same struct will read/write the wrong bytes.
 
 ### Bitfields
-Bitfield layout is **highly implementation-defined** and is a common source of ABI incompatibilities between compilers and even compiler versions.
+Bitfield layout is **highly implementation-defined** and is a common source of
+ABI incompatibilities between compilers and even compiler versions.
 
 ## 7. Kernel Application Binary Interface (KABI)
 
-KABI is a set of rules that define how user-space programs interact with the Linux kernel.
+KABI is a set of rules that define how user-space programs interact with the
+Linux kernel.
 
 ### 7.1 System Call ABI (User ↔ Kernel)
 
@@ -372,11 +618,14 @@ write(fd, buf, len)
 ```
 
 **Result**
-User program still calls write(1, "hi", 2) → kernel sees wrong arguments → data garbage or crash.
+User program still calls write(1, "hi", 2) → kernel sees wrong arguments → data
+garbage or crash.
 
 ---
 
-Linux guarantees this interface is **permanently stable**. A binary compiled for Linux 2.6 still runs on Linux 6.x because syscall numbers and conventions have not changed.
+Linux guarantees this interface is **permanently stable**. A binary compiled for
+Linux 2.6 still runs on Linux 6.x because syscall numbers and conventions have
+not changed.
 
 ### 7.2 Kernel Module ABI (KABI)
 
@@ -384,9 +633,12 @@ The internal interface between the kernel and its loadable modules (`.ko` files)
 - Exported kernel symbols (`EXPORT_SYMBOL`, `EXPORT_SYMBOL_GPL`).
 - Struct layouts used across the module boundary (`struct sk_buff`, `struct net_device`).
 
-This is **not stable** upstream — a module built for kernel 6.1 will NOT load on kernel 6.2 without recompilation (enforced by `vermagic` and `Module.symvers`).
+This is **not stable** upstream — a module built for kernel 6.1 will NOT load
+on kernel 6.2 without recompilation (enforced by `vermagic` and `Module.symvers`).
 
-Enterprise distributions (RHEL, SUSE) maintain a **stable KABI** across a major release so that third-party drivers don't need to be recompiled on every kernel update.
+Enterprise distributions (RHEL, SUSE) maintain a **stable KABI** across a major
+release so that third-party drivers don't need to be recompiled on every kernel
+update.
 
 **Example**
 
@@ -453,7 +705,8 @@ $ arm-linux-gnueabihf-readelf -h app | grep -i float
 ```
 
 ## 7.3 Shared Library ABI
-A shared library (.so) exposes a binary interface that other programs use at runtime.
+A shared library (.so) exposes a binary interface that other programs use at
+runtime.
 
 That ABI includes:
 - Function signatures (arguments, return types)
@@ -516,17 +769,20 @@ int rename(const char *oldpath, const char *newpath, int flags);  // new version
 ```
 
 Symbols are tagged in ELF:
+
 ```assembly
 rename@@GLIBC_2.2.5     ← old
 rename@GLIBC_2.34       ← new
 ```
+
 **When dynamic linker loads:**
 If app was linked against GLIBC_2.2.5 → sees old ABI
 If app linked against GLIBC_2.34 → sees new ABI
 This prevents ABI breakage for shared libraries
 
 ### 7.4 libc versioning
-libc (specifically glibc) is the gold standard for maintaining ABI stability over decades.
+libc (specifically glibc) is the gold standard for maintaining ABI stability
+over decades.
 
 glibc does symbol versioning, not just file versioning.
 Multiple versions of the same function can coexist inside one .so
@@ -657,165 +913,24 @@ $ readelf -V /usr/lib/arm-linux-gnueabihf/libcurl.so.4 | grep curl
   0x00000067: Version: 104 Name: CURL_OPENSSL_3
 ```
 
-### 7.5 Architecture ABI
-Architecture-specific rules:
+## 8. Real-World ABI Breakage Examples
 
-- Registers to use
-- Calling convention (who pushes what on stack)
-- Size of types
-- Floating-point handling
-- Endianness
+### 8.1 Linux ARM OABI → EABI (2007)
 
-**x86-64 System V ABI (Linux)**
-- Arguments: RDI, RSI, RDX, RCX, R8, R9, then stack
-- Return: RAX (64-bit), RDX:RAX (128-bit), XMM0/XMM1 (floats)
-- Stack alignment: 16 bytes
+**What happened:** ARM Linux transitioned from the old ABI (OABI) to the
+Embedded ABI (EABI).
 
-**AArch64 ABI**
-- Arguments: X0–X7 (32-bit W0–W7 for 32-bit values)
-- Return: X0/X1 or X0–X3 for struct
-- Stack alignment: 16 bytes
+- **OABI**: Passed `double` arguments in integer registers; had lax stack
+  alignment.
+- **EABI**: Passes `double` in VFP registers (or aligned pairs of integer
+  registers); requires 8-byte stack alignment at calls.
 
-**ARM32 (EABI)**
-- Arguments: R0–R3
-- Return: R0/R1
-
-**Why this matters for cross-compiling:**
-If you compile for wrong ABI:
-- Registers will have wrong values
-- Function prologues/epilogues won't match
-- Stack will be misaligned
-👉 Crash / undefined behavior
+**Impact:** All userspace binaries had to be rebuilt. OABI and EABI binaries
+cannot interoperate. Distributions shipped `libgcc_s.so` for each ABI.
 
 ---
 
-## 8. ABI in Action — Assembly Walk-Through
-
-### C Source
-
-```c
-struct point {
-    int x;
-    int y;
-};
-
-long x_square(struct point *ptr) {
-    return ptr->x * ptr->x;
-}
-```
-
-### ARM 32-bit Assembly (AAPCS)
-
-```asm
-x_square:
-    LDR  R0, [R0]       ; Load ptr->x (offset 0) into R0 — ABI says ptr is in R0
-    MUL  R0, R0, R0     ; R0 = R0 * R0
-    BX   LR             ; Return — ABI says return value is in R0
-```
-
-**ABI decisions visible here:**
-- `R0` carries the pointer argument (AAPCS rule: first arg → R0).
-- `ptr->x` is at offset 0 (struct layout ABI: first field at offset 0).
-- Return value goes in `R0` (AAPCS rule: integer return → R0).
-- `BX LR` returns using the link register (AAPCS calling sequence).
-
-### AArch64 Assembly (AAPCS64)
-
-```asm
-x_square:
-    LDR  W0, [X0]       ; Load ptr->x (32-bit int) — ptr in X0, return 64-bit in X0
-    SMULL X0, W0, W0    ; Signed multiply 32x32→64, result in X0
-    RET                 ; Return
-```
-
----
-
-## 9. ABI Breakage — What It Is and How It Happens
-
-An **ABI break** occurs when a change to a compiled artifact makes it **binary-incompatible** with other artifacts that were compiled against the old version, even though the source-level API may be unchanged.
-
-### 9.1 Struct Layout Change (Most Common)
-
-```c
-/* v1 — users compile their app against this */
-struct config {
-    int  timeout;   /* offset 0 */
-    int  retries;   /* offset 4 */
-};
-
-/* v2 — library author adds a field in the MIDDLE */
-struct config {
-    int  timeout;   /* offset 0 */
-    int  max_conn;  /* offset 4  ← NEW — shifts retries! */
-    int  retries;   /* offset 8  ← was 4 */
-};
-```
-
-The app reads `retries` at offset 4 (compiled against v1). The library writes `retries` at offset 8 (compiled as v2). **Silent data corruption.**
-
-### 9.2 Calling Convention Change
-
-If a library switches from passing a `double` in a VFP register to passing it on the stack, a caller compiled with the old convention reads a garbage register.
-
-### 9.3 Function Signature Change
-
-```c
-/* v1 */
-int connect(int fd, int port);
-
-/* v2 — type widened */
-int connect(int fd, long port);    /* 'port' now 8 bytes on LP64 */
-```
-
-Old caller pushes 4 bytes; new callee reads 8 bytes → stack corruption.
-
-### 9.4 Enum Size Change
-
-```c
-/* v1 — compiler chooses int (4 bytes) */
-enum Color { RED, GREEN, BLUE };
-
-/* v2 — new value forces unsigned int or larger */
-enum Color { RED, GREEN, BLUE, ULTRAVIOLET = 0xFFFFFFFF };
-```
-
-The enum's size may change depending on the compiler and ABI. Code passing `Color` in a struct now has a different layout.
-
-
-### 9.5 Removing or Renaming Exported Symbols
-
-If `libfoo.so.1` exports `void process_data(...)` and `libfoo.so.2` removes or renames it, any binary that `dlopen`s the library and looks up `process_data` will fail.
-
-### 9.6 Changing Global Variable Size
-
-A global array or struct exported from a shared library changes size. The dynamic linker copies the object into the BSS of the dependent binary — if the size doesn't match, a buffer overflow occurs.
-
----
-
-## 10. Real-World ABI Breakage Examples
-
-### 10.1 Linux ARM OABI → EABI (2007)
-
-**What happened:** ARM Linux transitioned from the old ABI (OABI) to the Embedded ABI (EABI).
-
-- **OABI**: Passed `double` arguments in integer registers; had lax stack alignment.
-- **EABI**: Passes `double` in VFP registers (or aligned pairs of integer registers); requires 8-byte stack alignment at calls.
-
-**Impact:** All userspace binaries had to be rebuilt. OABI and EABI binaries cannot interoperate. Distributions shipped `libgcc_s.so` for each ABI.
-
----
-
-### 10.2 GCC C++ ABI Change — GCC 3.x → GCC 4.x (2004)
-
-**What happened:** GCC changed its C++ ABI (primarily `std::string` and `std::list` internals).
-
-**Impact:**
-- C++ libraries compiled with GCC 3.x could not be linked with code compiled by GCC 4.x.
-- Distributions had to ship `libstdc++.so.5` (GCC 3) alongside `libstdc++.so.6` (GCC 4) for years.
-
----
-
-### 10.3 Linux Kernel Module Versioning (vermagic)
+### 8.2 Linux Kernel Module Versioning (vermagic)
 
 Every loadable kernel module (`.ko`) has a `vermagic` string embedded:
 
@@ -823,13 +938,17 @@ Every loadable kernel module (`.ko`) has a `vermagic` string embedded:
 vermagic = 6.1.0-rc4 SMP mod_unload ARMv7 p2v8
 ```
 
-The kernel refuses to load a module whose `vermagic` doesn't match the running kernel's. This is intentional KABI enforcement — kernel structs change between versions.
+The kernel refuses to load a module whose `vermagic` doesn't match the running
+kernel's. This is intentional KABI enforcement — kernel structs change between
+versions.
 
-**Example:** A Wi-Fi driver module compiled against kernel 5.15 headers will fail to load on kernel 6.1 because `struct net_device` may have changed size or field offsets.
+**Example:** A Wi-Fi driver module compiled against kernel 5.15 headers will
+fail to load on kernel 6.1 because `struct net_device` may have changed size or
+field offsets.
 
 ---
 
-### 10.4 glibc Symbol Versioning
+### 9.4 glibc Symbol Versioning
 
 glibc uses **symbol versioning** to maintain backward compatibility:
 
@@ -839,7 +958,10 @@ $ objdump -T /lib/x86_64-linux-gnu/libc.so.6 | grep " memcpy"
   memcpy@GLIBC_2.2.5
 ```
 
-The old `memcpy` (GLIBC_2.2.5) and the new one (GLIBC_2.14) coexist. Binaries built against the old symbol continue to work. If you build on a machine with GLIBC_2.14 and deploy on a machine with GLIBC_2.2.5, the binary will refuse to run:
+The old `memcpy` (GLIBC_2.2.5) and the new one (GLIBC_2.14) coexist. Binaries
+built against the old symbol continue to work. If you build on a machine with
+GLIBC_2.14 and deploy on a machine with GLIBC_2.2.5, the binary will refuse to
+run:
 
 ```
 ./app: /lib/x86_64-linux-gnu/libc.so.6: version 'GLIBC_2.14' not found
@@ -847,31 +969,17 @@ The old `memcpy` (GLIBC_2.2.5) and the new one (GLIBC_2.14) coexist. Binaries bu
 
 ---
 
-### 10.5 Android NDK and ABI Splits
+### 8.3 `sizeof(bool)` Incompatibility (C++ / Fortran)
 
-Android supports multiple hardware ABIs. An APK can contain `.so` files for each:
-
-```
-lib/
-  armeabi-v7a/libnative.so   ← 32-bit ARM, hardware FPU
-  arm64-v8a/libnative.so     ← 64-bit ARM
-  x86/libnative.so
-  x86_64/libnative.so
-```
-
-If only one ABI is packaged and the device uses a different one, the native library will fail to load. This is an ABI mismatch enforced by the Android linker.
+Some older Fortran compilers treat `LOGICAL` as 4 bytes; C++ `bool` is 1 byte. 
+Passing a `bool` array across a C++/Fortran boundary without explicit size
+agreement causes misreads.
 
 ---
 
-### 10.6 `sizeof(bool)` Incompatibility (C++ / Fortran)
+## 9. Detecting and Preventing ABI Breakage
 
-Some older Fortran compilers treat `LOGICAL` as 4 bytes; C++ `bool` is 1 byte. Passing a `bool` array across a C++/Fortran boundary without explicit size agreement causes misreads.
-
----
-
-## 11. Detecting and Preventing ABI Breakage
-
-### 11.1 Tools
+### 10.1 Tools
 
 | Tool | Purpose |
 |------|---------|
@@ -884,35 +992,21 @@ Some older Fortran compilers treat `LOGICAL` as 4 bytes; C++ `bool` is 1 byte. P
 | `ldd` | Show shared library dependencies of a binary |
 | `Module.symvers` | Kernel symbol CRC checksums for KABI |
 
-### 11.2 Best Practices for Stable Library ABIs
+### 9.2 Best Practices for Stable Library ABIs
 
-1. **Never change the size or layout of a public struct.** Add new fields at the end only, or use opaque pointers.
-2. **Use the PIMPL idiom** (pointer to implementation) to hide implementation details from the public header.
+1. **Never change the size or layout of a public struct.** Add new fields at the
+end only, or use opaque pointers.
+2. **Use the PIMPL idiom** (pointer to implementation) to hide implementation
+details from the public header.
 3. **Don't remove exported symbols.** Deprecate them but keep them.
-4. **Use symbol versioning** (`.symver` assembler directive or `--version-script` linker option) to version your exported symbols.
+4. **Use symbol versioning** (`.symver` assembler directive or `--version-script`
+linker option) to version your exported symbols.
 5. **Increment SONAME** on every ABI break (`libfoo.so.1` → `libfoo.so.2`).
 6. **Run `abidiff`** as part of CI on every release.
-7. **Use `extern "C"`** for C++ libraries exposed to C callers to avoid name-mangling issues.
+7. **Use `extern "C"`** for C++ libraries exposed to C callers to avoid
+name-mangling issues.
 
-### 11.3 Opaque Pointer Pattern (PIMPL)
-
-```c
-/* public header — foo.h */
-typedef struct Foo Foo;   /* forward declaration only — size hidden */
-Foo *foo_create(void);
-void foo_destroy(Foo *f);
-int  foo_get_value(Foo *f);
-
-/* implementation — foo.c */
-struct Foo {
-    int value;
-    int internal_cache;   /* can add fields freely — callers never see layout */
-};
-```
-
-Because callers only hold a pointer to `Foo` (never embed it by value), changing `struct Foo`'s layout does **not** break the ABI.
-
-### 11.4 Symbol Versioning Example (GNU)
+### 9.3 Symbol Versioning Example (GNU)
 
 ```c
 /* foo.c */
@@ -929,11 +1023,12 @@ LIB_1.0 { global: foo; local: *; };
 LIB_2.0 { global: foo; } LIB_1.0;
 ```
 
-Old binaries linked to `foo@LIB_1.0` still call the old implementation; new binaries call the new one. Both coexist in the same `.so`.
+Old binaries linked to `foo@LIB_1.0` still call the old implementation;
+new binaries call the new one. Both coexist in the same `.so`.
 
 ---
 
-## 12. Summary Cheat-Sheet
+## 10. Summary Cheat-Sheet
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
