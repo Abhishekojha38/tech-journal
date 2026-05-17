@@ -1,6 +1,8 @@
 # 1. Compiling C files with gcc
 
-Compilation is the translation of source code (the code we write) into object code (sequence of statements in machine language) by a compiler.
+Compilation is the translation of source code (the code we write) into object
+code (sequence of statements in machine language) by a compiler.
+
 The compilation process has four different steps:
 1. Preprocessing
 2. Compiling
@@ -9,11 +11,15 @@ The compilation process has four different steps:
 
 ![GCC Compilation Pipeline](assets/gcc-compilation-steps.svg)
 
-The compiler we will be using as an example is `gcc` which stands for **GNU Compiler Collection**.
+The compiler we will be using as an example is `gcc` which stands for
+**GNU Compiler Collection**.
 
-**GCC** supports various programming languages, including C, is completely free and is the go-to compiler for most Unix-like operating systems. In order to use it, we should make sur we install it on our computer, if it’s not already there
+**GCC** supports various programming languages, including C, is completely free
+and is the go-to compiler for most Unix-like operating systems. In order to use
+it, we should make sur we install it on our computer, if it’s not already there
 
-We will take a very know c code example to explain the above four steps of compilation.
+We will take a very know c code example to explain the above four steps of
+compilation.
 
 ```c
 #include <stdio.h>
@@ -118,10 +124,10 @@ Linux uses ELF format, a file format for executables, object code, shared librar
 
 The assembler:
 
-* Converts assembly instructions into machine code
-* Creates ELF object file structure
-* Builds symbol table
-* Creates relocation entries
+* Converts `assembly instructions` into `machine code`
+* Creates `ELF` object file structure
+* Builds `symbol table`
+* Creates `relocation entries`
 
 Organizes section like:
 
@@ -138,13 +144,14 @@ gcc -c main.s -o main.o
 ## 4. Linker (ld)
 The linker:
 
-* Combines multiple object files into a single executable
-* Resolves symbols (finds where functions and variables are defined)
-* Performs relocation (updates addresses to match final layout)
-* Stitches together standard libraries (libc, etc.)
-* Creates the final ELF executable
+* Combines multiple `object files` into a single executable
+* Resolves `symbols` (finds where functions and variables are defined)
+* Performs `relocation` (updates addresses to match final layout)
+* Stitches together `standard libraries` (libc, etc.)
+* Creates the final `ELF` executable
 
-linker uses `ld scripts` to map sections into memory. we can aslo write our own ld scripts to customize the memory layout
+linker uses `ld scripts` to map sections into memory. we can also write our own
+ld scripts to customize the memory layout
 
 ```bash
 ENTRY(_start)
@@ -305,11 +312,18 @@ The linker:
 
 ### 4.4 Default linker script
 
-The linker script is a file that tells the linker where to place the different sections of the executable in memory. It is a text file that is written in a special syntax that is specific to the linker.
+The linker script is a file that tells the linker where to place the different
+sections of the executable in memory. It is a text file that is written in a
+special syntax that is specific to the linker.
 
 ### Dynamic Linker/Loader
 
-The dynamic loader, also known as the dynamic linker, is a small program that is loaded into memory by the kernel before your application starts. It is responsible for finding and loading all the shared libraries your application needs, resolving symbols, and connecting everything together.
+Refer: Part7:ELFStructure.md for detailed information.
+
+The dynamic loader, also known as the dynamic linker, is a small program that is
+loaded into memory by the kernel before your application starts. It is
+responsible for finding and loading all the shared libraries your application
+needs, resolving symbols, and connecting everything together.
 
 When you run a dynamically linked executable:
 
