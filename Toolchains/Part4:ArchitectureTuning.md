@@ -1,6 +1,8 @@
 # 1. Architecture Tuning
 
-Architecture tuning usually refers to compiling your code so it’s optimized for a specific CPU architecture and micro-architecture, instead of using generic defaults.
+Architecture tuning usually refers to compiling your code so it’s optimized for
+a specific CPU architecture and micro-architecture, instead of using generic
+defaults.
 
 * GCC provides several config time options to tune for specific architecture.
 
@@ -18,7 +20,8 @@ Architecture tuning usually refers to compiling your code so it’s optimized fo
 
 Defines the instruction set architecture (ISA). 
 
-`-march` is a compiler option (commonly used with GCC/Clang) that specifies the target CPU architecture instruction set to generate code for.
+`-march` is a compiler option (commonly used with GCC/Clang) that specifies the
+target CPU architecture instruction set to generate code for.
 
 
 ```
@@ -41,11 +44,14 @@ aarch64-linux-gnu-gcc test.c \
     -o test
 ```
 
-`-march=armv8-a+crc+crypto` tells GCC: "Generate code for `ARMv8-A`, and enable `CRC` and `Crypto` instructions." If you don't include the `+crc+crypto` part, GCC won't use those instructions, even if the CPU supports them.
+`-march=armv8-a+crc+crypto` tells GCC: "Generate code for `ARMv8-A`, and enable
+`CRC` and `Crypto` instructions." If you don't include the `+crc+crypto` part,
+GCC won't use those instructions, even if the CPU supports them.
 
 ## 6.2 -mtune (CPU Core tuning)
 
-`-mtune` tells the compiler which CPU to optimize performance for, without changing instruction-set compatibility.
+`-mtune` tells the compiler which CPU to optimize performance for, without
+changing instruction-set compatibility.
 
 It optimizes:
 - instruction scheduling
@@ -67,7 +73,8 @@ For example, if you compile with:
 aarch64-linux-gnu-gcc test.c -march=armv8-a -mtune=cortex-a53 -o test
 ```
 
-The binary will run on any ARMv8-A CPU (because of `-march=armv8-a`), but it will run *best* on Cortex-A53 (because of `-mtune=cortex-a53`).
+The binary will run on any ARMv8-A CPU (because of `-march=armv8-a`), but it
+will run *best* on Cortex-A53 (because of `-mtune=cortex-a53`).
 
 **Example for better understanding:**
 
@@ -84,7 +91,8 @@ Optimize for Cortex-A53
 -march=armv8-a -mtune=cortex-a53
 ```
 
-Now compiler rearranges instructions for better performance on Cortex-A53 CPUs like the ones in i.MX8MQ.
+Now compiler rearranges instructions for better performance on Cortex-A53 CPUs
+like the ones in i.MX8MQ.
 
 ## 6.3 -mcpu (−march+−mtune)
 
@@ -121,8 +129,10 @@ Now compiler uses Cortex-A53-specific instructions and optimizations.
 
 **Note:**
 
-* `-mcpu` is often a **shorthand** for `-march` + `-mtune` + potentially other flags.
-* It's useful when you want the **absolute best performance** on a specific CPU model and don't need backward compatibility.
+* `-mcpu` is often a **shorthand** for `-march` + `-mtune` + potentially other
+flags.
+* It's useful when you want the **absolute best performance** on a specific CPU
+model and don't need backward compatibility.
 
 ## 6.4 -mfloat-abi and -mfpu (Floating Point Options)
 
@@ -131,8 +141,10 @@ Now compiler uses Cortex-A53-specific instructions and optimizations.
 Controls how floating-point numbers are handled:
 
 * `-mfloat-abi=soft` — Software-only floating-point (no hardware FPU used)
-* `-mfloat-abi=softfp` — Mixed mode: code calls FPU instructions, but arguments passed in integer registers
-* `-mfloat-abi=hard` — Hard-float: uses FPU instructions AND passes floating-point arguments in FPU registers
+* `-mfloat-abi=softfp` — Mixed mode: code calls FPU instructions, but arguments
+passed in integer registers
+* `-mfloat-abi=hard` — Hard-float: uses FPU instructions AND passes
+floating-point arguments in FPU registers
 
 ### -mfpu
 
