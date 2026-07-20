@@ -1,8 +1,7 @@
 # Embedded Linux Toolchains
 
-A practical reference for understanding, building, and using toolchains in
-Embedded Linux development. We will start with theoretical concepts and move
-to practical implementation. We will be using ARM64 as our target architecture.
+We will start with theoretical concepts and move to practical implementation.
+We will be using ARM64 as our target architecture.
 
 ## 1. What is a Toolchain?
 
@@ -15,43 +14,46 @@ software artifact (typically a binary executable).
 * kernel headers
 
 ## 1.1. Binutils
-A collection of low-level tools that operate on binary/object files.
+Tools that operate on binary/object files.
 
-Key tools inside binutils:
-
-| Tool | Role |
-|------|------|
-| **as** | Assembler — turns .s assembly into .o object files |
-| **ld** | Linker — combines .o files into a final executable or .so |
-| **objdump** | Disassemble / inspect object files |
-| **readelf** | Parse ELF headers, sections, symbols |
-| **nm** | List symbols in an object file |
-| **strip** | Remove debug symbols to shrink binaries |
-| **ar** | Create/manage static libraries (.a files) |
-| **objcopy** | Convert between binary formats (ELF → raw binary, etc.) |
+* **as**: assembler - turns .s assembly into .o object files
+* **ld**: linker combines .o files into a final executable or .so
+* **objdump**: disassemble / inspect object files
+* **readelf**: parse ELF headers, sections, symbols
+* **nm**: list symbols in an object file
+* **strip**: remove debug symbols to shrink binaries
+* **ar**: create/manage static libraries (.a files)
+* **objcopy**: convert between binary formats (ELF → raw binary, etc.)
 
 **Practical use:**
 
+* use readelf to inspect the binary file.
 ```bash
 # Inspect what architecture a binary was compiled for
 arm-linux-gnueabihf-readelf -h my_binary | grep Machine
+```
 
+* use objdump to disassemble the binary file.
+```bash
 # Disassemble an ARM object file
 arm-linux-gnueabihf-objdump -d my_file.o
+```
 
+* use nm to list symbols in an object file.
+```bash
 # Check what symbols a .o exposes
 arm-linux-gnueabihf-nm my_file.o
+```
 
+* use strip to remove debug symbols to shrink binaries.
+```bash
 # Strip debug info before deploying to target
 arm-linux-gnueabihf-strip my_binary
 ```
 
 ## 1.2. GCC (GNU Compiler Collection)
-The compiler that turns C/C++ source into machine code. In a cross toolchain, it
-targets a different architecture than the machine it runs on.
-
-GCC is a compiler driver which `orchestrates` the build process, It contains the
-following components:
+GCC converts c/c++ code into machine code. It is a compiler driver which
+`orchestrates` the build process, It contains the following components:
 
 ```bash
 Source (.c)
@@ -99,7 +101,7 @@ arm-linux-gnueabihf-gcc -march=armv7-a -mfpu=neon -mfloat-abi=hard -o hello hell
 
 ## 1.3. C Library Options
 
-The C library is critical in Embedded Linux — it provides the standard C API and
+The C library is critical in Embedded Linux. It provides the standard C API and
 wraps Linux system calls.
 
 | Library | Size | Features | Common Use Case |
@@ -126,25 +128,10 @@ the syscall interface — things like:
 * **Why they matter**: The C library (and your code) needs to know how to talk
 to the kernel. These headers define that contract.
 
-* **Key location in a sysroot**:
-
-```
-sysroot/
-  usr/
-    include/
-      linux/        ← kernel headers live here
-        types.h
-        ioctl.h
-        socket.h
-        ...
-      asm/          ← arch-specific (e.g. ARM register defs)
-      asm-generic/
-```
-
 * **How they're generated**:
 
 ```bash
-From kernel source, export headers for a target arch
+# From kernel source, export headers for a target arch
 make ARCH=arm INSTALL_HDR_PATH=/path/to/sysroot/usr headers_install
 ```
 
@@ -152,16 +139,17 @@ make ARCH=arm INSTALL_HDR_PATH=/path/to/sysroot/usr headers_install
 
 * They should match the minimum kernel version you'll run on
 
-* Newer headers ≠ always better — using headers newer than your target kernel
+* Newer headers ≠ always better using headers newer than your target kernel
 can introduce unavailable syscalls
 
-* The C library wraps these — you rarely include `<linux/...>` directly in
+* The C library wraps these you rarely include `<linux/...>` directly in
 app code, but `glibc/musl` does internally.
 
 
 ## 2. Cross-Compilation Concepts
 
 In native compilation, **build**, **host**, and **target** machines are the same.
+
 In embedded development, they differ:
 
 * **Build machine** - Machine building the cross-compiler. For example, your
