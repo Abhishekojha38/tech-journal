@@ -38,9 +38,8 @@ int printf(const char *format, ...);
 ### ABI — Application Binary Interface
 
 An **ABI** is a **binary-level contract**. It tells the machine **how** compiled
-code actually communicates — which registers hold arguments, how the stack is
-laid out, how structs are packed in memory, how symbols are named in object
-files.
+code actually communicates which registers hold arguments, how the stack is laid
+out, how structs are packed in memory, how symbols are named in object files.
 
 - Defined by the **toolchain, OS, and processor architecture** together.
 - Consumed at **link time** and **run time**.
@@ -80,18 +79,18 @@ saves/restores caller-saved vs callee-saved registers.
 
 ![Calling Convention](assets/ABICallingConvention.png)
 
-### 2.2 Register Usage
-ABI defines how registers are used when compiling source code. Let say if assembler 
-generates object code for "int add(int a, int b)" and compiler uses R0 for first 
-argument and R1 for second argument and R2 for return value. Then the assembler 
-should generate object code for add function that uses R0 for first argument and 
-R1 for second argument and R2 for return value.
+### 2.2 Register Usage (psABIs)
+
+ABI defines how registers are used when compiling source code. These informations
+are defined in psABIs provided by architecture designers.
+
+Let say if compiler generates object code for "int add(int a, int b)" that uses R0 
+for first argument and R1 for second argument and R2 for return value. Then the 
+compiler must ensure that assembler generates object code for add function that 
+uses R0 for first argument and R1 for second argument and R2 for return value.
 
 Else linker will fail to link the object code for add function with the object
 code for main function. Resulting into runtime error.
-
-Every register gets a role: argument, return value, scratch, preserved, stack
-pointer, frame pointer, link register.
 
 ### 2.3 Stack Layout and Frame Structure
 Direction of growth (almost always downward), alignment requirements, where
@@ -130,19 +129,21 @@ incompatible schemes crashes the unwinder.
 * Machine / Processor ABI (psABI)
 * Library ABI (Shared Library ABI)
 * Kernel ABI (KABI)
+* OS / System ABI
+* Language ABI (C, C++)
 
 ```
 ┌─────────────────────────────────────┐
-│          Language ABI               │  Level 5
+│          Language ABI               │
 ├─────────────────────────────────────┤
-│          System ABI                 │  Level 4
+│       Library ABI                   │
 ├─────────────────────────────────────┤
-│          Kernel ABI                 │  Level 3
+│       OS / System ABI               │
 ├─────────────────────────────────────┤
-│          psABI                      │  Level 2
+│          Kernel ABI                 │
 ├─────────────────────────────────────┤
-│          Hardware                   │  Level 1
-└─────────────────────────────────────┘
+│      Processor psABI                │
+└─────────────────────────────────────
 ```
 
 ### 3.1 Machine / Processor ABI (psABI)
@@ -162,11 +163,62 @@ It covers:
 | MIPS | MIPS O32 / N32 / N64 |
 | PowerPC 64-bit | ELFv2 ABI |
 
+#### Who defines psABIs?
+
+* **AAPCS (Procedure Call Standard for the Arm Architecture)** - Every compiler
+  (like GCC or Clang) targeting ARM must follow this document.
+* **System V AMD64 ABI** - Every compiler (like GCC or Clang) targeting x86-64
+  Linux must follow this document.
+* **RISC-V ELF psABI** - Every compiler (like GCC or Clang) targeting RISC-V must
+  follow this document.
+
+Every register gets a role: argument, return value, scratch, preserved, stack
+pointer, frame pointer, link register.
+
+ABI Mismatch senario:
+* It means the two pieces of code were compiled with either completely different
+  compilers or the same compiler using different configuration settings. One
+  file was compiled using GCC on Linux, while the other file was compiled using
+  MSVC on Windows.Mismatched compiler flags: Both files used GCC, but one was
+  compiled with the -mabi=ms flag to force Windows behavior.
+
+> **NOTE**
+MACHINE ABI (psABI)-mabi= flag is the primary compiler flag that decides the
+Processor Supplement ABI (psABI)
+
+```bash
+# ARM 32-bit
+-mabi=aapcs (standard layout) vs. -mabi=apcs (legacy layout).
+
+# RISC-V
+-mabi=lp64 (integer-only registers) vs. -mabi=lp64d (passes floating-point
+arguments directly in hardware float registers).
+
+# x86-64
+-mabi=ms (forces Windows calling convention) vs. -mabi=sysv (forces Linux/Unix
+calling convention)
+
+# Compiling for a modern ARM device with a hardware Floating Point Unit
+arm-linux-gnueabihf-gcc -mfloat-abi=hard -mfpu=vfpv3 -c game_physics.c
+
+# Compiling for legacy or emulated ARM compatibility
+arm-linux-gnueabi-gcc -mfloat-abi=soft -c legacy_calc.c
+
+# Enforcing the x86-64-v3 Microarchitecture psABI Tier
+gcc -march=x86-64-v3 -O2 -c video_encoder.c
+
+# Silencing compiler layout warnings during an upgrade
+gcc -Wno-psabi -O3 -c complex_structs.c -o complex_structs.o
+```
+
+Linker sees calls to `callee`, sees `callee` expects arg in R2, sees `caller`
+puts arg in R0 → ABI mismatch!
+
 #### What the psABI Defines?
 
 1. Register Set and Roles
 
-```
+```bash
 x86-64 psABI register map:
 
 rax   scratch / return value
@@ -189,7 +241,7 @@ rip   instruction pointer (not general purpose)
 ```
 
 2. Data Type Sizes and Alignment
-```
+```bash
 Type       Size   Alignment    Purpose
 char       1      1 byte       single bytes
 short      2      2 bytes      2-byte values
@@ -203,7 +255,7 @@ double     8      8 bytes      double-precision float
 
 3. Struct Layout and Padding
 
-```
+```bash
 struct Example {
     char  a;    // offset 0,  size 1
     // 3 bytes padding ← psABI alignment rule
@@ -216,7 +268,7 @@ struct Example {
 
 4. Calling Convention Foundation
 
-```
+```bash
 psABI defines:                    OS ABI adds:
 ──────────────                    ────────────
 which regs are scratch      →     which scratch regs carry args
@@ -225,7 +277,49 @@ stack direction/alignment   →     shadow space / red zone rules
 return value register       →     struct return conventions
 ```
 
-### 3.2 Library ABI (Shared Library ABI)
+### 3.2 Kernel ABI (KABI)
+
+```
+┌─────────────────────────────────────┐
+│          Language ABI               │
+├─────────────────────────────────────┤
+│       Library ABI                   │
+├─────────────────────────────────────┤
+│       OS / System ABI               │
+├─────────────────────────────────────┤
+│          Kernel ABI     ◄── HERE    │
+├─────────────────────────────────────┤
+│          psABI                      │
+└─────────────────────────────────────┘
+```
+
+Splits into two parts:
+
+#### a) System Call ABI (User ↔ Kernel)
+The interface between user-space programs and the kernel:
+- **System call numbers** (e.g., `read` = syscall 0 on x86-64, syscall 3 on ARM).
+- **Argument registers**: x86-64 uses `rdi, rsi, rdx, r10, r8, r9`; ARM uses
+  `r0–r6`.
+- **Return value**: `rax` / `r0`.
+- **`errno` encoding** in the return value.
+
+Linux guarantees this interface is **permanently stable**. A binary compiled for
+Linux 2.6 still runs on Linux 6.x because syscall numbers and conventions have
+not changed.
+
+#### b) Kernel Module ABI (KABI)
+The internal interface between the kernel and its loadable modules (`.ko` files):
+
+- Exported kernel symbols (`EXPORT_SYMBOL`, `EXPORT_SYMBOL_GPL`).
+- Struct layouts used across the module boundary (`struct sk_buff`, `struct net_device`).
+- This is **not stable** upstream — a module built for kernel 6.1 will NOT load
+  on kernel 6.2 without recompilation (enforced by `vermagic` and `Module.symvers`).
+
+Enterprise distributions (RHEL, SUSE) maintain a **stable KABI** across a major
+release so that third-party drivers don't need to be recompiled on every kernel
+update.
+
+### 3.3 Library ABI (Shared Library ABI)
 The contract exported by a `.so` (shared object). Includes:
 - The set of exported symbols (functions, global variables).
 - Their calling conventions.
@@ -238,7 +332,7 @@ The contract exported by a `.so` (shared object). Includes:
 ├─────────────────────────────────────┤
 │       Library ABI         ◄── HERE  │
 ├─────────────────────────────────────┤
-│          System ABI                 │
+│       OS / System ABI               │
 ├─────────────────────────────────────┤
 │          Kernel ABI                 │
 ├─────────────────────────────────────┤
@@ -385,33 +479,19 @@ call image_draw    →    image_draw@plt  →   [address]   →   image_draw()
                                             load time)
 ```
 
-### 3.3 Kernel ABI (KABI)
 
-Splits into two parts:
+### 3.4 Language ABI
 
-#### a) System Call ABI (User ↔ Kernel)
-The interface between user-space programs and the kernel:
-- **System call numbers** (e.g., `read` = syscall 0 on x86-64, syscall 3 on ARM).
-- **Argument registers**: x86-64 uses `rdi, rsi, rdx, r10, r8, r9`; ARM uses
-  `r0–r6`.
-- **Return value**: `rax` / `r0`.
-- **`errno` encoding** in the return value.
+A Language ABI establishes strict rules for:
 
-Linux guarantees this interface is **permanently stable**. A binary compiled for
-Linux 2.6 still runs on Linux 6.x because syscall numbers and conventions have
-not changed.
-
-#### b) Kernel Module ABI (KABI)
-The internal interface between the kernel and its loadable modules (`.ko` files):
-
-- Exported kernel symbols (`EXPORT_SYMBOL`, `EXPORT_SYMBOL_GPL`).
-- Struct layouts used across the module boundary (`struct sk_buff`, `struct net_device`).
-- This is **not stable** upstream — a module built for kernel 6.1 will NOT load
-  on kernel 6.2 without recompilation (enforced by `vermagic` and `Module.symvers`).
-
-Enterprise distributions (RHEL, SUSE) maintain a **stable KABI** across a major
-release so that third-party drivers don't need to be recompiled on every kernel
-update.
+- Symbol Name Mangling: How unique compiler symbols (with namespaces and overloads)
+  are encoded into plain ASCII strings for the linker.
+- Virtual Method Tables (vtables): The exact memory layout of pointers used to resolve
+  runtime polymorphism and inheritance.
+- Object Layout: How compiler-generated data (like hidden vtable pointers) and
+  base-class structures are padded and packed inside an object.
+- Exception Handling: The runtime data structures and stack-unwinding mechanisms
+  used to catch and throw errors.
 
 ## 4. Calling Conventions in Depth
 
